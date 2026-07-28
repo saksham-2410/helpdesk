@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isInfrastructureError } from "@/lib/auth/errors";
 
 /**
  * Next.js 16 renamed `middleware` to `proxy`. It runs on the Node.js runtime
@@ -34,6 +35,7 @@ function isPublic(pathname: string) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 }
+
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -84,9 +86,35 @@ export async function proxy(request: NextRequest) {
 
   // getUser() verifies the JWT with the auth server. getSession() only decodes
   // the cookie and is therefore spoofable — never gate access on it.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // This is a network call, so it can fail for reasons that have nothing to do
+  // with the visitor: Supabase outage, DNS failure, placeholder credentials in
+  // a fresh checkout. None of those should take down the landing page or the
+  // public help centre, so a failure degrades to "signed out" rather than
+  // propagating a 500 out of the proxy.
+  // Note supabase-js does not throw on a network failure — it resolves with an
+  // `error` instead. So "no session" and "cannot reach the auth service" both
+  // arrive as `user: null` and have to be told apart by inspecting the error,
+  // or an outage silently looks like every visitor being signed out.
+  let user = null;
+  let authUnavailable = false;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    user = data.user;
+    if (error && isInfrastructureError(error)) authUnavailable = true;
+  } catch {
+    authUnavailable = true;
+  }
+
+  // Public routes render regardless. Authenticated routes must not silently
+  // fall through unauthenticated, so they get an honest 503 instead.
+  if (authUnavailable) {
+    if (isPublic(pathname)) return response;
+    return new NextResponse(
+      "Service unavailable: cannot reach the authentication service.",
+      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
 
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
