@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "typegen": "next typegen",
-    "check:sql": "node scripts/check-sql.mjs supabase/migrations/*.sql"
+    "check:sql": "node scripts/check-sql.mjs supabase/migrations/*.sql",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm test"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
