@@ -1,26 +1,347 @@
 @import "tailwindcss";
 
+/* Class-based dark mode that still honours the OS preference by default.
+   The `.dark` / `.light` classes on <html> let a user override it. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===========================================================================
+   DESIGN SYSTEM — "Field Notes"
+   ---------------------------------------------------------------------------
+   A support desk should read like a well-made instrument, not a SaaS template.
+
+   Three rules this system enforces:
+
+   1. WARM, NOT COLD. Every competitor (Intercom, Zendesk, Front) sits on cool
+      slate grays. The neutral ramp here is warm-shifted toward paper. Agents
+      stare at this for eight-hour shifts; it reads softer and it reads
+      *different* on first glance.
+
+   2. CORAL IS A SIREN, NOT A COLOR. `signal` is reserved for things that need
+      a human right now — SLA breach, unread, unassigned. It should never cover
+      more than ~5% of the screen. An inbox where everything is colored is an
+      inbox where nothing is urgent.
+
+   3. TYPE ENCODES AUDIENCE. Serif for what the *customer* reads (KB articles,
+      empty states) so the help center feels like a publication. Sans for dense
+      *agent* surfaces. Mono for machine facts — IDs, timestamps, email headers
+      — which makes them scannable and non-negotiably distinct from prose.
+   =========================================================================== */
+
+/* `static` forces every token below to be emitted into :root even when no
+   utility class references it. Required here for two reasons: the styleguide
+   and the chat widget read tokens through raw `var(--color-…)`, and the widget
+   renders inside a Shadow DOM where Tailwind's generated utilities do not
+   reach. Without `static`, Tailwind tree-shakes those variables away and the
+   `var()` lookups silently resolve to nothing. */
+@theme static {
+  /* --- Type ---------------------------------------------------------------
+     Instrument Sans + Instrument Serif share a designer and a skeleton, so the
+     pairing is cohesive without being matchy. JetBrains Mono carries technical
+     payloads. Deliberately not Inter / Roboto / system-ui. */
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* --- Paper: warm neutral ramp ------------------------------------------
+     Hue held around 40° with falling chroma. This is the workhorse ramp:
+     canvas, surfaces, borders, and secondary text all come from here. */
+  --color-paper-50:  #fdfcfa;
+  --color-paper-100: #f8f6f2;
+  --color-paper-200: #efece5;
+  --color-paper-300: #e2ddd3;
+  --color-paper-400: #c5bfb2;
+  --color-paper-500: #9c9486;
+  --color-paper-600: #736c60;
+  --color-paper-700: #524c43;
+  --color-paper-800: #332f29;
+  --color-paper-900: #1f1c18;
+  --color-paper-950: #141210;
+
+  /* --- Petrol: the system voice ------------------------------------------
+     Primary actions, active nav, agent message bubbles, focus rings. Deep
+     enough to hold white text at 500 and up. */
+  --color-petrol-50:  #eef6f5;
+  --color-petrol-100: #d5e9e7;
+  --color-petrol-200: #a8d2ce;
+  --color-petrol-300: #74b4af;
+  --color-petrol-400: #43918c;
+  --color-petrol-500: #1e7370;
+  --color-petrol-600: #175d5b;
+  --color-petrol-700: #124a48;
+  --color-petrol-800: #0e3a39;
+  --color-petrol-900: #0a2d2c;
+  --color-petrol-950: #061c1c;
+
+  /* --- Signal: earns attention, never decorates --------------------------- */
+  --color-signal-50:  #fdf1ec;
+  --color-signal-100: #fadecf;
+  --color-signal-200: #f5bda3;
+  --color-signal-300: #ee9670;
+  --color-signal-400: #e87347;
+  --color-signal-500: #d95323;
+  --color-signal-600: #b8401a;
+  --color-signal-700: #933217;
+  --color-signal-800: #6f2715;
+  --color-signal-900: #4a1c11;
+
+  /* --- Semantic status ----------------------------------------------------
+     Muted on purpose: these sit in dense lists as small dots and pills, where
+     saturated colour turns into noise fast. */
+  --color-success-100: #dcece0;
+  --color-success-500: #3f7d55;
+  --color-success-700: #2a5639;
+  --color-warning-100: #f7ead0;
+  --color-warning-500: #b7822b;
+  --color-warning-700: #7d581c;
+  --color-danger-100:  #f6dcd9;
+  --color-danger-500:  #b23c30;
+  --color-danger-700:  #7d2820;
+
+  /* --- Radii --------------------------------------------------------------
+     Restrained. Big radii read toy-like; this is a professional tool. */
+  --radius-xs: 0.1875rem;
+  --radius-sm: 0.3125rem;
+  --radius-md: 0.4375rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+
+  /* --- Elevation ----------------------------------------------------------
+     Shadows tinted with the warm ink rather than pure black. Pure-black
+     shadows on a warm canvas look like dirt; these look like light. */
+  --shadow-hairline: 0 0 0 1px rgb(31 28 24 / 0.06);
+  --shadow-low:  0 1px 2px rgb(31 28 24 / 0.05), 0 1px 1px rgb(31 28 24 / 0.04);
+  --shadow-mid:  0 2px 4px rgb(31 28 24 / 0.05), 0 4px 12px rgb(31 28 24 / 0.07);
+  --shadow-high: 0 8px 24px rgb(31 28 24 / 0.10), 0 2px 6px rgb(31 28 24 / 0.06);
+  --shadow-widget: 0 12px 40px rgb(31 28 24 / 0.16), 0 4px 12px rgb(31 28 24 / 0.10);
+
+  /* --- Motion -------------------------------------------------------------
+     One easing for everything that moves. Consistency reads as craft. */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Semantic layer. Components reference these, never the raw ramps above, so
+   dark mode is a single set of overrides rather than a per-component audit.
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: var(--color-paper-100);      /* app background */
+  --surface: #ffffff;                     /* cards, panels, list rows */
+  --surface-sunken: var(--color-paper-200); /* wells, code, quoted email */
+  --surface-raised: #ffffff;              /* popovers, modals */
+
+  --border-subtle: var(--color-paper-200);
+  --border-default: var(--color-paper-300);
+  --border-strong: var(--color-paper-400);
+
+  --text-primary: var(--color-paper-900);
+  --text-secondary: var(--color-paper-700);
+  --text-muted: var(--color-paper-500);
+  --text-inverse: var(--color-paper-50);
+
+  --accent: var(--color-petrol-500);
+  --accent-hover: var(--color-petrol-600);
+  --accent-soft: var(--color-petrol-50);
+  --accent-text: #ffffff;
+
+  --ring: var(--color-petrol-400);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --canvas: var(--color-paper-950);
+  --surface: var(--color-paper-900);
+  --surface-sunken: #191612;
+  --surface-raised: var(--color-paper-800);
+
+  --border-subtle: #2b2721;
+  --border-default: #3a352d;
+  --border-strong: #4d463c;
+
+  --text-primary: var(--color-paper-100);
+  --text-secondary: var(--color-paper-300);
+  --text-muted: var(--color-paper-500);
+  --text-inverse: var(--color-paper-950);
+
+  --accent: var(--color-petrol-400);
+  --accent-hover: var(--color-petrol-300);
+  --accent-soft: var(--color-petrol-950);
+  --accent-text: var(--color-paper-950);
+
+  --ring: var(--color-petrol-400);
 }
 
+/* Follow the OS unless an explicit .light class opts out. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light) {
+    --canvas: var(--color-paper-950);
+    --surface: var(--color-paper-900);
+    --surface-sunken: #191612;
+    --surface-raised: var(--color-paper-800);
+
+    --border-subtle: #2b2721;
+    --border-default: #3a352d;
+    --border-strong: #4d463c;
+
+    --text-primary: var(--color-paper-100);
+    --text-secondary: var(--color-paper-300);
+    --text-muted: var(--color-paper-500);
+    --text-inverse: var(--color-paper-950);
+
+    --accent: var(--color-petrol-400);
+    --accent-hover: var(--color-petrol-300);
+    --accent-soft: var(--color-petrol-950);
+    --accent-text: var(--color-paper-950);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Expose the semantic layer as Tailwind utilities: bg-canvas, text-muted,
+   border-default, ring-ring, and so on. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    border-color: var(--border-subtle);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Tabular figures everywhere by default: timestamps, counts, and metrics
+       in a dense list must not jitter as digits change. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A single visible focus treatment across the whole app. Keyboard operators
+     are a first-class audience in an inbox. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: var(--color-petrol-200);
+    color: var(--color-petrol-900);
+  }
+  .dark ::selection {
+    background-color: var(--color-petrol-800);
+    color: var(--color-petrol-50);
+  }
+
+  /* Headings and anything customer-facing default to the serif. */
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.011em;
+    color: var(--text-primary);
+  }
+
+  /* Thin, unobtrusive scrollbars — the conversation list is scrolled constantly. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--text-muted); }
+}
+
+@layer utilities {
+  /* Small uppercase label — column headers, section dividers, metadata keys. */
+  .label-eyebrow {
+    font-size: 0.6875rem;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Machine facts: conversation ids, Message-ID headers, timestamps. */
+  .text-machine {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: -0.01em;
+    color: var(--text-muted);
+  }
+
+  /* Paper grain. Used sparingly — the auth screens and the public knowledge
+     base — to keep large empty areas from reading as flat dead space. */
+  .texture-grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Staggered entrance for list rows. Set --i on the row. */
+  .animate-rise {
+    animation: rise 0.4s var(--ease-out-quint) both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+  }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* Typing indicator dots — used in both the widget and the agent composer. */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-3px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
