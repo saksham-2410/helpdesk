@@ -31,9 +31,17 @@ export const getActiveWorkspace = cache(async (): Promise<ActiveWorkspace | null
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // `members_select`'s RLS policy scopes to "any row in a workspace I
+  // belong to" (needed so the team directory can list co-members), not
+  // "only my own row" — so this query MUST filter by user_id itself rather
+  // than leaning on RLS for that. Without it, `order by created_at` picks
+  // whichever member's row happens to sort first (typically the workspace's
+  // creator/admin), and every other member ends up reading the FIRST
+  // member's role and workspace instead of their own.
   const { data, error } = await supabase
     .from("workspace_members")
     .select("role, workspace:workspaces(id, name, slug)")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
