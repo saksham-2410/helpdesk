@@ -10,6 +10,7 @@ import {
   removeProjectDomain,
   genericVerificationInstructions,
   isCustomDomainsEnabled,
+  resolveDomainStatus,
   VercelApiError,
 } from "@/lib/vercel/domains";
 
@@ -58,9 +59,10 @@ export async function addDomain(_prev: ActionState, formData: FormData): Promise
 
   if (isCustomDomainsEnabled()) {
     try {
-      const result = await addProjectDomain(domain);
-      status = result.verified ? "active" : "verifying";
-      verification = result.verification.length > 0 ? result.verification : verification;
+      const ownership = await addProjectDomain(domain);
+      const resolved = await resolveDomainStatus(domain, ownership);
+      status = resolved.status;
+      verification = resolved.verification.length > 0 ? resolved.verification : verification;
     } catch (err) {
       // Still record the domain — pending with generic instructions beats
       // losing the attempt entirely because Vercel's API hiccupped.
@@ -104,13 +106,14 @@ export async function verifyDomain(domainId: string): Promise<ActionState> {
   }
 
   try {
-    const result = await verifyProjectDomain(row.domain);
+    const ownership = await verifyProjectDomain(row.domain);
+    const resolved = await resolveDomainStatus(row.domain, ownership);
     await supabase
       .from("workspace_domains")
       .update({
-        status: result.verified ? "active" : "verifying",
-        verification: result.verification,
-        verified_at: result.verified ? new Date().toISOString() : null,
+        status: resolved.status,
+        verification: resolved.verification,
+        verified_at: resolved.status === "active" ? new Date().toISOString() : null,
         last_error: null,
       })
       .eq("id", domainId);

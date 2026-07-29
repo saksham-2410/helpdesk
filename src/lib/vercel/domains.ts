@@ -84,6 +84,39 @@ export async function removeProjectDomain(domain: string): Promise<void> {
   });
 }
 
+export interface DomainConfigStatus {
+  /** Whether DNS actually resolves to Vercel and a TLS cert can be issued.
+   *  This is NOT the same thing as `verified` above — `verified` is an
+   *  OWNERSHIP check (do you control this domain), and for a subdomain
+   *  nobody else has claimed, Vercel returns verified:true immediately,
+   *  before any DNS record has been added. Confirmed against Vercel's own
+   *  docs after this exact confusion showed up live: a domain reported as
+   *  "active" with zero DNS configured. `misconfigured` is what actually
+   *  gates traffic + SSL. */
+  misconfigured: boolean;
+  recommendedCname: string | null;
+}
+
+/** GET /v6/domains/{domain}/config — the actual DNS/traffic check,
+ *  independent of the ownership-only `verified` flag above. */
+export async function getDomainConfig(domain: string): Promise<DomainConfigStatus> {
+  const url = new URL(`https://api.vercel.com/v6/domains/${encodeURIComponent(domain)}/config`);
+  if (env.vercelTeamId) url.searchParams.set("teamId", env.vercelTeamId);
+  url.searchParams.set("projectIdOrName", env.vercelProjectId ?? "");
+
+  const res = await fetch(url, {
+    headers: { authorization: `Bearer ${env.vercelToken}` },
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new VercelApiError(body?.error?.message ?? `Vercel API error (${res.status})`, res.status);
+  }
+  return {
+    misconfigured: Boolean(body.misconfigured),
+    recommendedCname: body.recommendedCNAME?.[0]?.value ?? null,
+  };
+}
+
 /**
  * Best-effort DNS instructions when there's no Vercel token to ask for the
  * real ones — a subdomain (3+ labels, e.g. help.acme.com) needs a CNAME; a
@@ -102,4 +135,33 @@ export function genericVerificationInstructions(domain: string): VerificationRec
 
 export function isCustomDomainsEnabled(): boolean {
   return features.customDomains;
+}
+
+export interface ResolvedDomainStatus {
+  status: "pending" | "verifying" | "active";
+  verification: VerificationRecord[];
+}
+
+/** Combines the ownership check (`verified`) with the actual DNS/traffic
+ *  check (`misconfigured`) into the three-state status this app tracks.
+ *  Ownership alone is not "active" — a fresh subdomain nobody else has
+ *  claimed comes back verified:true immediately, before any DNS record
+ *  exists, which is not the same as traffic actually routing to Vercel. */
+export async function resolveDomainStatus(
+  domain: string,
+  ownership: VercelDomainStatus,
+): Promise<ResolvedDomainStatus> {
+  if (!ownership.verified) {
+    return { status: "verifying", verification: ownership.verification };
+  }
+  const config = await getDomainConfig(domain);
+  if (config.misconfigured) {
+    return {
+      status: "pending",
+      verification: [
+        { type: "CNAME", domain, value: config.recommendedCname ?? "cname.vercel-dns.com" },
+      ],
+    };
+  }
+  return { status: "active", verification: [] };
 }
