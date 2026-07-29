@@ -130,6 +130,7 @@
   --surface: #ffffff;                     /* cards, panels, list rows */
   --surface-sunken: var(--color-paper-200); /* wells, code, quoted email */
   --surface-raised: #ffffff;              /* popovers, modals */
+  --surface-emphasis: var(--color-paper-200); /* neutral pills that must read as a shape, not blend into surface */
 
   --border-subtle: var(--color-paper-200);
   --border-default: var(--color-paper-300);
@@ -146,6 +147,15 @@
   --accent-text: #ffffff;
 
   --ring: var(--color-petrol-400);
+
+  --signal-soft: var(--color-signal-100);
+  --signal-text: var(--color-signal-700);
+  --success-soft: var(--color-success-100);
+  --success-text: var(--color-success-700);
+  --warning-soft: var(--color-warning-100);
+  --warning-text: var(--color-warning-700);
+  --danger-soft: var(--color-danger-100);
+  --danger-text: var(--color-danger-700);
 }
 
 .dark {
@@ -153,6 +163,7 @@
   --surface: var(--color-paper-900);
   --surface-sunken: #191612;
   --surface-raised: var(--color-paper-800);
+  --surface-emphasis: var(--color-paper-700);
 
   --border-subtle: #2b2721;
   --border-default: #3a352d;
@@ -169,6 +180,15 @@
   --accent-text: var(--color-paper-950);
 
   --ring: var(--color-petrol-400);
+
+  --signal-soft: var(--color-signal-900);
+  --signal-text: var(--color-signal-200);
+  --success-soft: color-mix(in srgb, var(--color-success-700) 25%, transparent);
+  --success-text: var(--color-success-100);
+  --warning-soft: color-mix(in srgb, var(--color-warning-700) 25%, transparent);
+  --warning-text: var(--color-warning-100);
+  --danger-soft: color-mix(in srgb, var(--color-danger-700) 25%, transparent);
+  --danger-text: var(--color-danger-100);
 }
 
 /* Follow the OS unless an explicit .light class opts out. */
@@ -178,6 +198,7 @@
     --surface: var(--color-paper-900);
     --surface-sunken: #191612;
     --surface-raised: var(--color-paper-800);
+    --surface-emphasis: var(--color-paper-700);
 
     --border-subtle: #2b2721;
     --border-default: #3a352d;
@@ -192,6 +213,15 @@
     --accent-hover: var(--color-petrol-300);
     --accent-soft: var(--color-petrol-950);
     --accent-text: var(--color-paper-950);
+
+    --signal-soft: var(--color-signal-900);
+    --signal-text: var(--color-signal-200);
+    --success-soft: color-mix(in srgb, var(--color-success-700) 25%, transparent);
+    --success-text: var(--color-success-100);
+    --warning-soft: color-mix(in srgb, var(--color-warning-700) 25%, transparent);
+    --warning-text: var(--color-warning-100);
+    --danger-soft: color-mix(in srgb, var(--color-danger-700) 25%, transparent);
+    --danger-text: var(--color-danger-100);
   }
 }
 
@@ -202,6 +232,7 @@
   --color-surface: var(--surface);
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-emphasis: var(--surface-emphasis);
 
   --color-border-subtle: var(--border-subtle);
   --color-border-default: var(--border-default);
@@ -216,6 +247,15 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-accent-text: var(--accent-text);
+
+  --color-signal-soft: var(--signal-soft);
+  --color-signal-text: var(--signal-text);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
 
   --color-ring: var(--ring);
 }

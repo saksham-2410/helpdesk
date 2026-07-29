@@ -4,16 +4,18 @@ import { cn } from "@/lib/cn";
 type Tone = "neutral" | "accent" | "signal" | "success" | "warning" | "danger";
 
 const TONES: Record<Tone, string> = {
-  // dark:bg-paper-800 used to sit almost flush against --surface
-  // (paper-900) and most panels (paper-800/900 range) — the pill read as
-  // barely-there in dark mode. paper-700 + a near-white label gives it
-  // actual separation from its background instead of blending in.
-  neutral: "bg-paper-200 text-secondary dark:bg-paper-700 dark:text-paper-100",
+  // Every tone here is a semantic token (bg-*-soft / text-*-text), never a
+  // literal dark:bg-* override: this app's dark mode is driven by @media
+  // (prefers-color-scheme: dark) rewriting the semantic custom properties
+  // directly — there is no .dark CLASS toggle, so Tailwind's class-gated
+  // `dark:` variant never actually applies here. A literal dark:bg-paper-700
+  // silently does nothing. See the "Semantic layer" comment in globals.css.
+  neutral: "bg-surface-emphasis text-primary",
   accent: "bg-accent-soft text-accent",
-  signal: "bg-signal-100 text-signal-700 dark:bg-signal-900 dark:text-signal-200",
-  success: "bg-success-100 text-success-700 dark:bg-success-700/25 dark:text-success-100",
-  warning: "bg-warning-100 text-warning-700 dark:bg-warning-700/25 dark:text-warning-100",
-  danger: "bg-danger-100 text-danger-700 dark:bg-danger-700/25 dark:text-danger-100",
+  signal: "bg-signal-soft text-signal-text",
+  success: "bg-success-soft text-success-text",
+  warning: "bg-warning-soft text-warning-text",
+  danger: "bg-danger-soft text-danger-text",
 };
 
 export function Badge({
