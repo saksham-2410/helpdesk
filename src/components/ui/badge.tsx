@@ -4,7 +4,11 @@ import { cn } from "@/lib/cn";
 type Tone = "neutral" | "accent" | "signal" | "success" | "warning" | "danger";
 
 const TONES: Record<Tone, string> = {
-  neutral: "bg-paper-200 text-secondary dark:bg-paper-800",
+  // dark:bg-paper-800 used to sit almost flush against --surface
+  // (paper-900) and most panels (paper-800/900 range) — the pill read as
+  // barely-there in dark mode. paper-700 + a near-white label gives it
+  // actual separation from its background instead of blending in.
+  neutral: "bg-paper-200 text-secondary dark:bg-paper-700 dark:text-paper-100",
   accent: "bg-accent-soft text-accent",
   signal: "bg-signal-100 text-signal-700 dark:bg-signal-900 dark:text-signal-200",
   success: "bg-success-100 text-success-700 dark:bg-success-700/25 dark:text-success-100",
