@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { CopyCode } from "@/components/ui/copy-code";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
-import { env } from "@/lib/env";
+import { env, features } from "@/lib/env";
 import { TeamSection, type Member, type PendingInvite } from "./team-section";
+import { DomainsSection, type WorkspaceDomain } from "./domains-section";
 
 export const metadata = { title: "Settings" };
 
@@ -18,7 +19,7 @@ export default async function SettingsPage() {
   // into the client, that helper's inference fights itself on an RPC that
   // returns a set of rows. Plain casts are fine here — both shapes are
   // narrow, hand-written, and match their SQL definitions in 0005.
-  const [{ data: membersData }, { data: invitesData }] = await Promise.all([
+  const [{ data: membersData }, { data: invitesData }, { data: domainsData }] = await Promise.all([
     supabase.rpc("list_workspace_members", { ws: workspace.id }),
     supabase
       .from("invites")
@@ -26,9 +27,15 @@ export default async function SettingsPage() {
       .eq("workspace_id", workspace.id)
       .is("accepted_at", null)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("workspace_domains")
+      .select("id, domain, status, verification, last_error")
+      .eq("workspace_id", workspace.id)
+      .order("created_at", { ascending: true }),
   ]);
   const members = (membersData ?? []) as Member[];
   const invites = (invitesData ?? []) as PendingInvite[];
+  const domains = (domainsData ?? []) as WorkspaceDomain[];
 
   const snippet = `<script src="${env.appUrl}/widget.js" data-workspace="${workspace.slug}" defer></script>`;
 
@@ -67,6 +74,12 @@ export default async function SettingsPage() {
             isAdmin={workspace.role === "admin"}
           />
         </section>
+
+        <DomainsSection
+          domains={domains}
+          isAdmin={workspace.role === "admin"}
+          customDomainsAutomated={features.customDomains}
+        />
       </div>
     </>
   );

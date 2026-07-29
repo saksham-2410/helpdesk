@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isInfrastructureError } from "@/lib/auth/errors";
+import { looksLikeOwnHost, resolveCustomDomainSlug } from "@/lib/domains/resolve";
 
 /**
  * Next.js 16 renamed `middleware` to `proxy`. It runs on the Node.js runtime
@@ -42,6 +43,23 @@ export async function proxy(request: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // A request on a tenant's own connected domain (help.theirsite.com) is
+  // never the app's own dashboard — it's always the public help centre, for
+  // any visitor, signed in or not. Resolved and rewritten before any of the
+  // auth logic below runs, and never blocks: a lookup failure here just
+  // means "not a custom domain," falling through to the ordinary routes.
+  const host = request.headers.get("host") ?? "";
+  if (supabaseUrl && supabaseAnonKey && !looksLikeOwnHost(host)) {
+    const slug = await resolveCustomDomainSlug(host, supabaseUrl, supabaseAnonKey).catch(
+      () => null,
+    );
+    if (slug) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname === "/" ? `/help/${slug}` : `/help/${slug}${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
 
   // Misconfiguration must not take down the whole site. This runs on every
   // request, so any unguarded failure here — missing credentials, a malformed
