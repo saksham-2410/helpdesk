@@ -53,12 +53,14 @@ export function ConversationThread({
 
   useEffect(() => {
     const supabase = createBrowserSupabase();
-    // Topic MUST be exactly `conv:<id>` — this is the same broadcast topic
-    // the widget (src/widget/realtime.ts) and the server's broadcast()
-    // helper (lib/widget/realtime.ts) target for typing/read events, on top
-    // of the postgres_changes subscription this channel already carried.
+    // Its own channel, not shared with the conv:<id> broadcast topic below
+    // — that topic is also joined by the widget's anonymous client with a
+    // different config (broadcast+presence only, no postgres_changes).
+    // Distinct concerns get distinct topics on principle, even though
+    // testing traced an actual live-update gap to the Realtime publication
+    // itself rather than to topic sharing (see project notes).
     const channel = supabase
-      .channel(`conv:${conversation.id}`)
+      .channel(`thread:${conversation.id}`)
       .on(
         "postgres_changes",
         {
@@ -73,6 +75,22 @@ export function ConversationThread({
           if (row.author_type === "contact") void markConversationRead(conversation.id);
         },
       )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversation.id]);
+
+  useEffect(() => {
+    const supabase = createBrowserSupabase();
+    // Topic MUST be exactly `conv:<id>` — this is the same broadcast topic
+    // the widget (src/widget/realtime.ts) and the server's broadcast()
+    // helper (lib/widget/realtime.ts) target for typing/read events.
+    // Broadcast-only: see the comment above on why this stays split from
+    // the postgres_changes channel.
+    const channel = supabase
+      .channel(`conv:${conversation.id}`)
       .on("broadcast", { event: "typing" }, ({ payload }: { payload: { from: "visitor" | "agent"; typing: boolean } }) => {
         if (payload.from === "visitor") setVisitorTyping(payload.typing);
       })
