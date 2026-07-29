@@ -117,8 +117,11 @@ export function ConversationThread({
         onAssigneeChange={setAssigneeId}
       />
 
-      <div ref={bodyRef} className="flex-1 overflow-y-auto bg-canvas px-6 py-5">
+      <div className="mx-auto w-full max-w-2xl px-6 pt-4">
         <SummaryPanel conversationId={conversation.id} messageCount={messages.length} />
+      </div>
+
+      <div ref={bodyRef} className="flex-1 overflow-y-auto bg-canvas px-6 py-5">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {messages.map((m) => (
             <MessageRow key={m.id} message={m} currentUserId={currentUserId} members={members} />

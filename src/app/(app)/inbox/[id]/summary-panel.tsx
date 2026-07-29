@@ -71,7 +71,7 @@ export function SummaryPanel({
   if (messageCount < 6 || state.status === "unavailable") return null;
 
   return (
-    <div className="mx-auto mb-4 max-w-2xl rounded-lg border border-border-subtle bg-surface">
+    <div className="mx-auto mb-3 max-w-2xl rounded-lg border border-border-subtle bg-surface shadow-low">
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
@@ -89,7 +89,7 @@ export function SummaryPanel({
       </button>
 
       {!collapsed && (
-        <div className="border-t border-border-subtle px-4 py-3.5">
+        <div className="max-h-[30vh] overflow-y-auto border-t border-border-subtle px-4 py-3.5">
           {state.status === "error" && (
             <p className="text-xs text-secondary">
               Couldn&apos;t generate a summary right now. The inbox still works fine without it.
