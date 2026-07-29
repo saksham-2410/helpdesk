@@ -18,12 +18,16 @@ const password = z.string().min(8, "Use at least 8 characters.");
 const SignupSchema = z.object({
   email,
   password,
-  workspaceName: z
-    .string()
-    .trim()
-    .min(2, "Give your workspace a name.")
-    .max(80, "That name is too long."),
+  // Absent (and unvalidated below) when signup arrives via an invite link —
+  // that user is joining an existing workspace, not naming a new one.
+  workspaceName: z.string().trim().max(80, "That name is too long.").nullish(),
 });
+
+function safeNext(value: FormDataEntryValue | null): string | null {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//")
+    ? value
+    : null;
+}
 
 const LoginSchema = z.object({
   email,
@@ -43,12 +47,23 @@ export async function signUp(
   _prev: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const next = safeNext(formData.get("next"));
+  // Signing up from an invite link joins an EXISTING workspace — creating a
+  // new one here as well would leave the invited person as the admin of an
+  // orphaned workspace nobody asked for, on top of (separately) joining the
+  // one they were actually invited to.
+  const isInviteFlow = next?.startsWith("/invite/") ?? false;
+
   const parsed = SignupSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     workspaceName: formData.get("workspaceName"),
   });
   if (!parsed.success) return { fieldErrors: flatten(parsed.error) };
+
+  if (!isInviteFlow && (parsed.data.workspaceName?.length ?? 0) < 2) {
+    return { fieldErrors: { workspaceName: "Give your workspace a name." } };
+  }
 
   const supabase = await createServerSupabase();
 
@@ -76,6 +91,11 @@ export async function signUp(
     };
   }
 
+  if (isInviteFlow) {
+    // redirect() signals by throwing, so it must sit outside any try/catch.
+    redirect(next!);
+  }
+
   // Atomic: workspace + admin membership in one transaction. See
   // create_workspace_for_user in 0003_functions.sql.
   const { error: wsError } = await supabase.rpc("create_workspace_for_user", {
@@ -87,7 +107,6 @@ export async function signUp(
     return { error: `Could not create the workspace: ${wsError.message}` };
   }
 
-  // redirect() signals by throwing, so it must sit outside any try/catch.
   redirect("/inbox");
 }
 

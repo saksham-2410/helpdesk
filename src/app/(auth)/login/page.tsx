@@ -11,6 +11,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
+  const signupHref = next ? `/signup?next=${encodeURIComponent(next)}` : "/signup";
 
   return (
     <>
@@ -26,7 +27,7 @@ export default async function LoginPage({
       <p className="mt-8 text-sm text-muted">
         New here?{" "}
         <Link
-          href="/signup"
+          href={signupHref}
           className="font-medium text-accent underline-offset-4 hover:underline"
         >
           Create a workspace

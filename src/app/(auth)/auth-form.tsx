@@ -20,10 +20,15 @@ export function AuthForm({
   mode,
   action,
   next,
+  skipWorkspaceName,
 }: {
   mode: "login" | "signup";
   action: (state: AuthFormState, formData: FormData) => Promise<AuthFormState>;
   next?: string;
+  /** True when this signup is redeeming a team invite — the workspace
+   *  already exists, so asking for a name here would be both confusing and
+   *  irrelevant (see (auth)/actions.ts's isInviteFlow). */
+  skipWorkspaceName?: boolean;
 }) {
   const [state, formAction] = useActionState<AuthFormState, FormData>(action, {});
   const isSignup = mode === "signup";
@@ -41,7 +46,7 @@ export function AuthForm({
         </div>
       )}
 
-      {isSignup && (
+      {isSignup && !skipWorkspaceName && (
         <Field
           label="Workspace name"
           htmlFor="workspaceName"
@@ -91,7 +96,7 @@ export function AuthForm({
       </Field>
 
       <SubmitButton
-        label={isSignup ? "Create workspace" : "Sign in"}
+        label={isSignup ? (skipWorkspaceName ? "Create account" : "Create workspace") : "Sign in"}
         pendingLabel={isSignup ? "Creating…" : "Signing in…"}
       />
     </form>
