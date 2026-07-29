@@ -15,6 +15,13 @@ export interface SessionResponse {
   messages: WidgetMessage[];
 }
 
+export interface KbSuggestion {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+}
+
 export class WidgetApiError extends Error {
   constructor(
     message: string,
@@ -64,6 +71,16 @@ export function createWidgetApi(apiBase: string, workspaceSlug: string) {
       });
       const data = await parseOrThrow<{ messages: WidgetMessage[] }>(res);
       return data.messages;
+    },
+
+    async suggestArticles(query: string): Promise<KbSuggestion[]> {
+      const url = new URL(`${apiBase}/api/widget/kb/suggest`);
+      url.searchParams.set("workspace", workspaceSlug);
+      url.searchParams.set("q", query);
+      const res = await fetch(url.toString());
+      if (!res.ok) return [];
+      const data = (await res.json()) as { articles?: KbSuggestion[] };
+      return data.articles ?? [];
     },
   };
 }

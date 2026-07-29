@@ -319,6 +319,38 @@
     animation: rise 0.4s var(--ease-out-quint) both;
     animation-delay: calc(var(--i, 0) * 40ms);
   }
+
+  /* Knowledge base article body — shared by the Tiptap editor surface and the
+     public article render, so what an agent writes is what a visitor reads.
+     Headings inherit the global h1/h2/h3 serif rule above; this only adds
+     the spacing rhythm and marks the block-level elements need. */
+  .prose-kb {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+  }
+  .prose-kb > * + * { margin-top: 0.9em; }
+  .prose-kb h1 { font-size: 1.5rem; }
+  .prose-kb h2 { font-size: 1.25rem; }
+  .prose-kb h3 { font-size: 1.0625rem; }
+  .prose-kb ul, .prose-kb ol { padding-left: 1.375em; }
+  .prose-kb ul { list-style: disc; }
+  .prose-kb ol { list-style: decimal; }
+  .prose-kb li + li { margin-top: 0.35em; }
+  .prose-kb a { color: var(--color-petrol-600); text-underline-offset: 2px; text-decoration: underline; }
+  .prose-kb blockquote {
+    border-left: 2px solid var(--border-strong);
+    padding-left: 0.9em;
+    color: var(--text-secondary);
+  }
+  .prose-kb code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-paper-200);
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-xs);
+  }
+  .dark .prose-kb code { background: var(--color-paper-800); }
 }
 
 @keyframes rise {

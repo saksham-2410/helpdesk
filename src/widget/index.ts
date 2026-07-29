@@ -105,6 +105,7 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
         <div class="status" data-online="false"><span class="dot"></span><span class="status-text">Connecting…</span></div>
       </div>
       <div class="body"></div>
+      <div class="kb-suggestions" hidden></div>
       <div class="composer">
         <textarea rows="1" placeholder="Write a message…" maxlength="4000"></textarea>
         <button type="button" aria-label="Send">${ICON_SEND}</button>
@@ -120,6 +121,7 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
   const statusTextEl = root.querySelector<HTMLSpanElement>(".status-text")!;
   const textareaEl = root.querySelector<HTMLTextAreaElement>("textarea")!;
   const sendBtnEl = root.querySelector<HTMLButtonElement>(".composer button")!;
+  const suggestionsEl = root.querySelector<HTMLDivElement>(".kb-suggestions")!;
 
   const state: State = {
     status: "idle",
@@ -138,6 +140,31 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
   let connection: ConversationConnection | null = null;
   let typingLocal = false;
   let typingStopTimer: ReturnType<typeof setTimeout> | null = null;
+  let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+  let suggestSeq = 0;
+
+  function renderSuggestions(articles: { title: string; slug: string }[]) {
+    if (articles.length === 0) {
+      suggestionsEl.hidden = true;
+      suggestionsEl.innerHTML = "";
+      return;
+    }
+    suggestionsEl.hidden = false;
+    suggestionsEl.innerHTML =
+      `<div class="kb-suggestions-label">Might help</div>` +
+      articles
+        .map(
+          (a) =>
+            `<a class="kb-suggestion" href="${__HD_API_BASE__}/help/${encodeURIComponent(workspaceSlug!)}/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`,
+        )
+        .join("");
+  }
+
+  function clearSuggestions() {
+    if (suggestTimer) clearTimeout(suggestTimer);
+    suggestTimer = null;
+    renderSuggestions([]);
+  }
 
   function renderStatus() {
     statusEl.dataset.online = String(state.agentOnline);
@@ -309,6 +336,24 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
     }
     if (typingStopTimer) clearTimeout(typingStopTimer);
     typingStopTimer = setTimeout(stopTypingSignal, TYPING_STOP_DELAY_MS);
+
+    const query = textareaEl.value.trim();
+    if (suggestTimer) clearTimeout(suggestTimer);
+    if (query.length < 4) {
+      renderSuggestions([]);
+      return;
+    }
+    const seq = ++suggestSeq;
+    suggestTimer = setTimeout(async () => {
+      try {
+        const articles = await api.suggestArticles(query);
+        // A slower, stale request can resolve after a newer one — only the
+        // latest debounced call is allowed to paint.
+        if (seq === suggestSeq) renderSuggestions(articles);
+      } catch {
+        if (seq === suggestSeq) renderSuggestions([]);
+      }
+    }, 350);
   });
 
   async function send() {
@@ -316,6 +361,7 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
     if (!text || !state.token || state.status !== "ready") return;
 
     stopTypingSignal();
+    clearSuggestions();
     textareaEl.value = "";
     textareaEl.style.height = "auto";
 

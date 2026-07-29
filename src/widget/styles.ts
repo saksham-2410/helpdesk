@@ -211,6 +211,37 @@ export const WIDGET_CSS = /* css */ `
     30% { transform: translateY(-3px); opacity: 1; }
   }
 
+  .kb-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--hd-paper-200);
+    background: var(--hd-paper-100);
+    flex-shrink: 0;
+  }
+  .kb-suggestions-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--hd-paper-500);
+    padding: 0 2px 2px;
+  }
+  .kb-suggestion {
+    display: block;
+    padding: 7px 9px;
+    border-radius: var(--hd-radius-md);
+    background: var(--hd-paper-50);
+    border: 1px solid var(--hd-paper-200);
+    color: var(--hd-petrol-600);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-decoration: none;
+    line-height: 1.3;
+  }
+  .kb-suggestion:hover { background: white; border-color: var(--hd-accent); }
+
   .composer {
     display: flex;
     align-items: flex-end;
