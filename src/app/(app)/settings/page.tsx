@@ -5,6 +5,7 @@ import { CopyCode } from "@/components/ui/copy-code";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { env, features } from "@/lib/env";
+import { replyToAddress } from "@/lib/email/threading";
 import { TeamSection, type Member, type PendingInvite } from "./team-section";
 import { DomainsSection, type WorkspaceDomain } from "./domains-section";
 
@@ -38,6 +39,10 @@ export default async function SettingsPage() {
   const domains = (domainsData ?? []) as WorkspaceDomain[];
 
   const snippet = `<script src="${env.appUrl}/widget.js" data-workspace="${workspace.slug}" defer></script>`;
+  // Reuses the exact function that builds the Reply-To on outbound mail
+  // (lib/email/threading.ts) — this is not a display-only copy of the
+  // format, it's the same address the inbound webhook actually matches on.
+  const supportAddress = features.email ? replyToAddress(workspace.slug, env.emailDomain) : null;
 
   return (
     <>
@@ -64,6 +69,19 @@ export default async function SettingsPage() {
           </p>
           <CopyCode code={snippet} />
         </section>
+
+        {supportAddress && (
+          <section>
+            <h2 className="mb-3 font-serif text-xl">Email</h2>
+            <p className="mb-3 text-sm leading-relaxed text-secondary">
+              Publish this as your support address — anything sent to it lands in your Inbox as a
+              new conversation, and replies thread automatically in the customer&apos;s mail client.
+              It&apos;s specific to this workspace, so it works correctly no matter how many other
+              workspaces exist on this deployment.
+            </p>
+            <CopyCode code={supportAddress} />
+          </section>
+        )}
 
         <section>
           <h2 className="mb-3 font-serif text-xl">Team</h2>
