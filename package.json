@@ -11,10 +11,14 @@
     "typegen": "next typegen",
     "check:sql": "node scripts/check-sql.mjs supabase/migrations/*.sql",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm test",
+    "build:widget": "node scripts/build-widget.mjs",
+    "predev": "npm run build:widget",
+    "prebuild": "npm run build:widget"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
+    "@supabase/realtime-js": "^2.111.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "clsx": "^2.1.1",
