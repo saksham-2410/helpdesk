@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -271,17 +271,17 @@ function SendButton() {
 
 function Composer({ conversation }: { conversation: ConversationDetail }) {
   const action = conversation.channel === "email" ? sendEmailReplyAction : sendChatReplyAction;
-  const boundAction = action.bind(null, conversation.id);
-  const [state, formAction] = useFormActionState(boundAction);
   const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction] = useActionState<ActionState, FormData>(async (_prev, formData) => {
+    const result = await action(conversation.id, formData);
+    if (!result.error) formRef.current?.reset();
+    return result;
+  }, {});
 
   return (
     <form
       ref={formRef}
-      action={async (formData) => {
-        const result = await formAction(formData);
-        if (!result.error) formRef.current?.reset();
-      }}
+      action={formAction}
       className="relative flex items-end gap-2.5 border-t border-border-subtle bg-surface px-5 py-3.5"
     >
       <Textarea
@@ -304,28 +304,4 @@ function Composer({ conversation }: { conversation: ConversationDetail }) {
       )}
     </form>
   );
-}
-
-/**
- * useActionState needs a module-level import of `react`; kept local and tiny
- * here rather than pulled in for a one-line wrapper elsewhere. Resets the
- * form via the browser's native `reset` after a successful submit — actions
- * here don't return the new message, the realtime subscription is what
- * actually renders it.
- */
-function useFormActionState(action: (formData: FormData) => Promise<ActionState>) {
-  const [state, setState] = useState<ActionState>({});
-  const [, startTransition] = useTransition();
-
-  function dispatch(formData: FormData) {
-    return new Promise<ActionState>((resolve) => {
-      startTransition(async () => {
-        const result = await action(formData);
-        setState(result);
-        resolve(result);
-      });
-    });
-  }
-
-  return [state, dispatch] as const;
 }
