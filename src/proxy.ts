@@ -43,67 +43,59 @@ export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Misconfiguration must not take down the whole site. Constructing a
-  // Supabase client with undefined credentials throws, and because this runs
-  // on every request that would turn one missing env var into a 500 on every
-  // route — including fully static pages that need no database at all.
+  // Misconfiguration must not take down the whole site. This runs on every
+  // request, so any unguarded failure here — missing credentials, a malformed
+  // URL, a network error — turns into a 500 on every route, including fully
+  // static pages that need no database at all.
   //
-  // Instead: let public pages render, and refuse authenticated routes with an
-  // explicit 503 rather than silently letting them through unauthenticated.
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (isPublic(pathname)) return NextResponse.next({ request });
-    return new NextResponse(
-      "Service unavailable: Supabase credentials are not configured on this deployment.",
-      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
-    );
-  }
-
-  // Cookie plumbing per @supabase/ssr: writes must land on BOTH the forwarded
-  // request (so this render sees the fresh token) and the outgoing response
-  // (so the browser stores it).
+  // Everything from client construction through the auth check is therefore
+  // one try/catch. `createServerClient()` throws SYNCHRONOUSLY on a malformed
+  // URL (e.g. `new URL()` failing inside the SDK) — that failure happens
+  // before any cookie or await is involved, so it is not enough to wrap only
+  // the network call; the constructor call must be inside the same guard.
   let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
-      },
-    },
-  );
-
-  // getUser() verifies the JWT with the auth server. getSession() only decodes
-  // the cookie and is therefore spoofable — never gate access on it.
-  //
-  // This is a network call, so it can fail for reasons that have nothing to do
-  // with the visitor: Supabase outage, DNS failure, placeholder credentials in
-  // a fresh checkout. None of those should take down the landing page or the
-  // public help centre, so a failure degrades to "signed out" rather than
-  // propagating a 500 out of the proxy.
-  // Note supabase-js does not throw on a network failure — it resolves with an
-  // `error` instead. So "no session" and "cannot reach the auth service" both
-  // arrive as `user: null` and have to be told apart by inspecting the error,
-  // or an outage silently looks like every visitor being signed out.
   let user = null;
-  let authUnavailable = false;
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    user = data.user;
-    if (error && isInfrastructureError(error)) authUnavailable = true;
-  } catch {
-    authUnavailable = true;
+  let authUnavailable = !supabaseUrl || !supabaseAnonKey;
+
+  if (!authUnavailable) {
+    try {
+      // Cookie plumbing per @supabase/ssr: writes must land on BOTH the
+      // forwarded request (so this render sees the fresh token) and the
+      // outgoing response (so the browser stores it).
+      const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            for (const { name, value } of cookiesToSet) {
+              request.cookies.set(name, value);
+            }
+            response = NextResponse.next({ request });
+            for (const { name, value, options } of cookiesToSet) {
+              response.cookies.set(name, value, options);
+            }
+          },
+        },
+      });
+
+      // getUser() verifies the JWT with the auth server. getSession() only
+      // decodes the cookie and is therefore spoofable — never gate access on
+      // it. Note supabase-js does not throw on a network failure — it
+      // resolves with an `error` instead — so "no session" and "cannot reach
+      // the auth service" both arrive as `user: null` and have to be told
+      // apart by inspecting the error (see isInfrastructureError), or an
+      // outage silently looks like every visitor being signed out.
+      const { data, error } = await supabase.auth.getUser();
+      user = data.user;
+      if (error && isInfrastructureError(error)) authUnavailable = true;
+    } catch {
+      // Anything unexpected — malformed URL, DNS failure, a bad key format —
+      // degrades to the same "service unavailable" path rather than crashing
+      // the proxy. A misconfigured deployment must not take the whole site
+      // down for every visitor.
+      authUnavailable = true;
+    }
   }
 
   // Public routes render regardless. Authenticated routes must not silently
