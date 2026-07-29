@@ -187,6 +187,18 @@ export async function markConversationRead(conversationId: string): Promise<void
   });
 }
 
+/** Agent-side half of the typing indicator — the widget already sends its
+ *  own `from: "visitor"` typing events and renders `from: "agent"` ones
+ *  (src/widget/realtime.ts), but nothing on the dashboard ever broadcast
+ *  the agent's side of it until now. Chat-only: an email reply has no live
+ *  recipient to show a typing state to. */
+export async function sendTypingSignal(conversationId: string, typing: boolean): Promise<void> {
+  await broadcast(conversationId, {
+    event: "typing",
+    payload: { from: "agent", typing },
+  });
+}
+
 function textToSimpleHtml(text: string): string {
   const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return escaped

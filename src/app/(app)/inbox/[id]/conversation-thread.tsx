@@ -16,8 +16,11 @@ import {
   sendChatReplyAction,
   sendEmailReplyAction,
   markConversationRead,
+  sendTypingSignal,
   type ActionState,
 } from "../actions";
+
+const TYPING_STOP_DELAY_MS = 2000;
 
 /**
  * Message bodies render as plain text (body_text), never body_html, even
@@ -41,6 +44,7 @@ export function ConversationThread({
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState(conversation.status);
   const [assigneeId, setAssigneeId] = useState(conversation.assignee_id);
+  const [visitorTyping, setVisitorTyping] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,8 +53,12 @@ export function ConversationThread({
 
   useEffect(() => {
     const supabase = createBrowserSupabase();
+    // Topic MUST be exactly `conv:<id>` — this is the same broadcast topic
+    // the widget (src/widget/realtime.ts) and the server's broadcast()
+    // helper (lib/widget/realtime.ts) target for typing/read events, on top
+    // of the postgres_changes subscription this channel already carried.
     const channel = supabase
-      .channel(`thread:${conversation.id}`)
+      .channel(`conv:${conversation.id}`)
       .on(
         "postgres_changes",
         {
@@ -65,16 +73,20 @@ export function ConversationThread({
           if (row.author_type === "contact") void markConversationRead(conversation.id);
         },
       )
+      .on("broadcast", { event: "typing" }, ({ payload }: { payload: { from: "visitor" | "agent"; typing: boolean } }) => {
+        if (payload.from === "visitor") setVisitorTyping(payload.typing);
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      setVisitorTyping(false);
     };
   }, [conversation.id]);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, visitorTyping]);
 
   return (
     <>
@@ -93,6 +105,7 @@ export function ConversationThread({
           {messages.map((m) => (
             <MessageRow key={m.id} message={m} currentUserId={currentUserId} members={members} />
           ))}
+          {visitorTyping && <TypingRow />}
         </div>
       </div>
 
@@ -262,6 +275,23 @@ function MessageRow({
   );
 }
 
+function TypingRow() {
+  return (
+    <div className="flex gap-2.5">
+      <Avatar size="sm" className="mt-0.5 shrink-0" />
+      <div className="flex items-center gap-1 rounded-lg border border-border-subtle bg-surface px-3.5 py-3">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="size-1.5 rounded-full bg-muted"
+            style={{ animation: "typing-bounce 1.1s infinite ease-in-out", animationDelay: `${i * 0.12}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SendButton() {
   const { pending } = useFormStatus();
   return (
@@ -274,11 +304,33 @@ function SendButton() {
 function Composer({ conversation }: { conversation: ConversationDetail }) {
   const action = conversation.channel === "email" ? sendEmailReplyAction : sendChatReplyAction;
   const formRef = useRef<HTMLFormElement>(null);
+  // Typing signal is chat-only — an email reply has no live recipient on the
+  // other end to show it to. Mirrors the widget's own send/debounce shape
+  // (src/widget/index.ts) so both sides behave the same way.
+  const isChat = conversation.channel === "chat";
+  const typingActive = useRef(false);
+  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  function stopTypingSignal() {
+    if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+    typingStopTimer.current = undefined;
+    if (typingActive.current) {
+      typingActive.current = false;
+      void sendTypingSignal(conversation.id, false);
+    }
+  }
+
   const [state, formAction] = useActionState<ActionState, FormData>(async (_prev, formData) => {
+    if (isChat) stopTypingSignal();
     const result = await action(conversation.id, formData);
     if (!result.error) formRef.current?.reset();
     return result;
   }, {});
+
+  useEffect(() => {
+    return () => stopTypingSignal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup only, not a reactive effect
+  }, []);
 
   return (
     <form
@@ -293,6 +345,15 @@ function Composer({ conversation }: { conversation: ConversationDetail }) {
         }
         required
         className="min-h-[44px]"
+        onChange={() => {
+          if (!isChat) return;
+          if (!typingActive.current) {
+            typingActive.current = true;
+            void sendTypingSignal(conversation.id, true);
+          }
+          if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+          typingStopTimer.current = setTimeout(stopTypingSignal, TYPING_STOP_DELAY_MS);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
