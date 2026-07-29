@@ -1,18 +1,13 @@
-import { PageHeader, EmptyState } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: "Inbox" };
 
+/** Rendered inside the list-pane layout when no conversation is selected. */
 export default function InboxPage() {
   return (
-    <>
-      <PageHeader
-        title="Inbox"
-        description="Chat and email conversations in one place."
-      />
-      <EmptyState
-        title="No conversations yet"
-        description="Install the chat widget on your site or send an email to your support address, and conversations will land here."
-      />
-    </>
+    <EmptyState
+      title="Select a conversation"
+      description="Chat and email conversations for this workspace appear in the list on the left. Install the widget or email your support address to see one land here live."
+    />
   );
 }
