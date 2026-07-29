@@ -109,6 +109,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!user && !isPublic(pathname)) {
+    // An authenticated API route (e.g. /api/conversations/[id]/summary,
+    // fetched client-side from the inbox) must fail as JSON, not as a
+    // redirect to an HTML login page — fetch() follows redirects
+    // transparently, so the caller would otherwise see a 200 with an HTML
+    // body instead of a 401 it can actually branch on.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     // Preserve intent so the user lands where they were headed after signing in.
