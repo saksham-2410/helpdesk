@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getPublicWorkspaceBySlug } from "@/lib/workspace/public";
 import { searchArticles } from "@/lib/kb/data";
-import { widgetJson, widgetPreflight } from "@/lib/widget/cors";
+import { widgetJson, widgetPreflight, widgetSafe } from "@/lib/widget/cors";
 import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 /**
@@ -43,13 +43,17 @@ export async function GET(request: Request) {
     return widgetJson(request, { articles: [] });
   }
 
-  const workspace = await getPublicWorkspaceBySlug(parsed.data.workspace);
+  return widgetSafe(request, () => handleSuggest(request, parsed.data.workspace, parsed.data.q));
+}
+
+async function handleSuggest(request: Request, workspaceSlug: string, query: string): Promise<Response> {
+  const workspace = await getPublicWorkspaceBySlug(workspaceSlug);
   if (!workspace) {
     return widgetJson(request, { articles: [] });
   }
 
   const supabase = await createServerSupabase();
-  const articles = await searchArticles(supabase, workspace.id, parsed.data.q, 3);
+  const articles = await searchArticles(supabase, workspace.id, query, 3);
 
   return widgetJson(request, { articles });
 }

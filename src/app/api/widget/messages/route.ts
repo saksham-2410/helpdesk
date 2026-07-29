@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { verifyVisitorToken, bearerToken } from "@/lib/widget/token";
+import { verifyVisitorToken, bearerToken, type VisitorClaims } from "@/lib/widget/token";
 import { broadcast } from "@/lib/widget/realtime";
-import { widgetJson, widgetPreflight } from "@/lib/widget/cors";
+import { widgetJson, widgetPreflight, widgetSafe } from "@/lib/widget/cors";
 import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 /**
@@ -50,6 +50,14 @@ export async function GET(request: Request) {
     return widgetJson(request, { error: "Invalid 'after' timestamp." }, { status: 400 });
   }
 
+  return widgetSafe(request, () => handleGet(request, claims, after));
+}
+
+async function handleGet(
+  request: Request,
+  claims: VisitorClaims,
+  after: string | null,
+): Promise<Response> {
   const db = createServiceSupabase();
   let query = db
     .from("messages")
@@ -111,6 +119,14 @@ export async function POST(request: Request) {
     );
   }
 
+  return widgetSafe(request, () => handlePost(request, claims, parsed.data.body));
+}
+
+async function handlePost(
+  request: Request,
+  claims: VisitorClaims,
+  body: string,
+): Promise<Response> {
   const db = createServiceSupabase();
   const { data: message, error } = await db
     .from("messages")
@@ -118,7 +134,7 @@ export async function POST(request: Request) {
       workspace_id: claims.workspaceId,
       conversation_id: claims.conversationId,
       author_type: "contact",
-      body_text: parsed.data.body,
+      body_text: body,
     })
     .select("id, author_type, body_text, created_at")
     .single();

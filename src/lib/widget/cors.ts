@@ -40,3 +40,25 @@ export function widgetJson(
     headers: { ...widgetCorsHeaders(request), ...init.headers },
   });
 }
+
+/**
+ * Every widget route runs on third-party sites with no fallback UI beyond
+ * "Request failed" — an UNCAUGHT exception (a missing env var throwing out
+ * of createServiceSupabase()/signVisitorToken(), say) produces Next's
+ * generic error response, which isn't JSON, doesn't carry CORS headers
+ * (so the browser reports a CORS failure that hides the real 500), and
+ * logs nothing actionable. Wrapping each handler's body here means a
+ * misconfigured deployment fails as a clean, CORS-safe JSON 500 with the
+ * real cause in the server logs instead of an opaque one on both ends.
+ */
+export async function widgetSafe(
+  request: Request,
+  handler: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    return await handler();
+  } catch (err) {
+    console.error("[widget] unhandled error", err);
+    return widgetJson(request, { error: "Internal error." }, { status: 500 });
+  }
+}

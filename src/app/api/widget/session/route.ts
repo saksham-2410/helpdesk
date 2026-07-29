@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { signVisitorToken } from "@/lib/widget/token";
-import { widgetJson, widgetPreflight } from "@/lib/widget/cors";
+import { widgetJson, widgetPreflight, widgetSafe } from "@/lib/widget/cors";
 import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 /**
@@ -62,6 +62,13 @@ export async function POST(request: Request) {
   }
   const { workspaceSlug, visitorId, email, name } = parsed.data;
 
+  return widgetSafe(request, () => handleSession({ workspaceSlug, visitorId, email, name }, request));
+}
+
+async function handleSession(
+  { workspaceSlug, visitorId, email, name }: z.infer<typeof RequestSchema>,
+  request: Request,
+): Promise<Response> {
   const db = createServiceSupabase();
 
   const { data: workspace, error: workspaceError } = await db
