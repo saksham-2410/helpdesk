@@ -228,7 +228,7 @@ function FilterPill({
       className={
         active
           ? "rounded-xs bg-accent px-2 py-0.5 text-[0.6875rem] font-medium text-accent-text"
-          : "rounded-xs px-2 py-0.5 text-[0.6875rem] font-medium text-secondary hover:bg-paper-200 dark:hover:bg-paper-800"
+          : "rounded-xs px-2 py-0.5 text-[0.6875rem] font-medium text-secondary hover:bg-surface-emphasis"
       }
     >
       {children}

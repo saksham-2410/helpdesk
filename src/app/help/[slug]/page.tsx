@@ -64,7 +64,7 @@ export default async function HelpCentrePage({
                       <li key={a.id}>
                         <Link
                           href={`/help/${workspace.slug}/${a.slug}`}
-                          className="block px-4 py-3.5 transition-colors hover:bg-paper-100 dark:hover:bg-paper-800"
+                          className="block px-4 py-3.5 transition-colors hover:bg-surface-emphasis"
                         >
                           <p className="text-sm font-medium">{a.title}</p>
                           {a.excerpt && (
@@ -88,7 +88,7 @@ export default async function HelpCentrePage({
                     <li key={a.id}>
                       <Link
                         href={`/help/${workspace.slug}/${a.slug}`}
-                        className="block px-4 py-3.5 transition-colors hover:bg-paper-100 dark:hover:bg-paper-800"
+                        className="block px-4 py-3.5 transition-colors hover:bg-surface-emphasis"
                       >
                         <p className="text-sm font-medium">{a.title}</p>
                         {a.excerpt && (

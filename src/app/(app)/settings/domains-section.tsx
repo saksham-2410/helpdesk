@@ -136,7 +136,7 @@ function DomainRow({ domain, isAdmin }: { domain: WorkspaceDomain; isAdmin: bool
               <p className="mb-2 text-xs text-secondary">Add this DNS record at your registrar:</p>
               <div className="overflow-x-auto rounded-md border border-border-subtle">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-paper-100 text-secondary dark:bg-paper-900">
+                  <thead className="bg-surface-sunken text-secondary">
                     <tr>
                       <th className="px-3 py-1.5 font-medium">Type</th>
                       <th className="px-3 py-1.5 font-medium">Name</th>

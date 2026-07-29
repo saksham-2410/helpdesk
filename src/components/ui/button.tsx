@@ -9,12 +9,15 @@ const VARIANTS: Record<Variant, string> = {
   primary:
     "bg-accent text-accent-text shadow-low hover:bg-accent-hover active:translate-y-px",
   // Default for most toolbar actions — reads as a real control without
-  // competing with the primary.
+  // competing with the primary. hover:bg-surface-emphasis (not
+  // hover:bg-paper-100 + a dark:hover: override): this app has no .dark
+  // class, so a literal dark: variant never applies — see badge.tsx's
+  // comment on the semantic layer. The old pairing left the light-mode
+  // near-white hover active unconditionally in dark mode too.
   secondary:
-    "bg-surface text-primary border border-border-default shadow-low hover:bg-paper-100 hover:border-border-strong active:translate-y-px dark:hover:bg-paper-800",
+    "bg-surface text-primary border border-border-default shadow-low hover:bg-surface-emphasis hover:border-border-strong active:translate-y-px",
   // For dense rows where a bordered button would add visual debt.
-  ghost:
-    "text-secondary hover:bg-paper-200/70 hover:text-primary dark:hover:bg-paper-800",
+  ghost: "text-secondary hover:bg-surface-emphasis hover:text-primary",
   // Destructive: delete article, remove teammate.
   danger:
     "bg-danger-500 text-white shadow-low hover:bg-danger-700 active:translate-y-px",

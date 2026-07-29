@@ -97,8 +97,8 @@ export function SummaryPanel({
           )}
           {state.status === "loading" && !state.summary && (
             <div className="space-y-2">
-              <div className="h-3 w-3/4 animate-pulse rounded bg-paper-200 dark:bg-paper-800" />
-              <div className="h-3 w-1/2 animate-pulse rounded bg-paper-200 dark:bg-paper-800" />
+              <div className="h-3 w-3/4 animate-pulse rounded bg-surface-emphasis" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-surface-emphasis" />
             </div>
           )}
           {state.summary && (

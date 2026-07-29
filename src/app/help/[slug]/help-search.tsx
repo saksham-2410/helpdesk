@@ -57,7 +57,7 @@ export function HelpSearch({ workspaceSlug }: { workspaceSlug: string }) {
             <li key={r.id}>
               <Link
                 href={`/help/${workspaceSlug}/${r.slug}`}
-                className="block px-4 py-2.5 text-sm hover:bg-paper-100 dark:hover:bg-paper-800"
+                className="block px-4 py-2.5 text-sm hover:bg-surface-emphasis"
               >
                 {r.title}
               </Link>

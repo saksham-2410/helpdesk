@@ -123,10 +123,10 @@ const TOOLBAR_BUTTONS: Array<{
 ];
 
 function EditorToolbar({ editor }: { editor: Editor | null }) {
-  if (!editor) return <div className="h-9 rounded-t-md border border-border-default bg-paper-100 dark:bg-paper-900" />;
+  if (!editor) return <div className="h-9 rounded-t-md border border-border-default bg-surface-sunken" />;
 
   return (
-    <div className="flex flex-wrap items-center gap-1 rounded-t-md border border-border-default bg-paper-100 px-2 py-1.5 dark:bg-paper-900">
+    <div className="flex flex-wrap items-center gap-1 rounded-t-md border border-border-default bg-surface-sunken px-2 py-1.5">
       {TOOLBAR_BUTTONS.map((btn) => (
         <button
           key={btn.label}
@@ -136,7 +136,7 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
             "rounded-xs px-2 py-1 text-[0.75rem] font-medium transition-colors",
             btn.isActive(editor)
               ? "bg-accent text-accent-text"
-              : "text-secondary hover:bg-paper-200 dark:hover:bg-paper-800",
+              : "text-secondary hover:bg-surface-emphasis",
           )}
         >
           {btn.label}
@@ -153,7 +153,7 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
           "rounded-xs px-2 py-1 text-[0.75rem] font-medium transition-colors",
           editor.isActive("link")
             ? "bg-accent text-accent-text"
-            : "text-secondary hover:bg-paper-200 dark:hover:bg-paper-800",
+            : "text-secondary hover:bg-surface-emphasis",
         )}
       >
         link

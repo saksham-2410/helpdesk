@@ -67,7 +67,7 @@ export function SidebarNav() {
               "group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[0.8125rem] font-medium transition-colors",
               active
                 ? "bg-accent-soft text-accent"
-                : "text-secondary hover:bg-paper-200/70 hover:text-primary dark:hover:bg-paper-800",
+                : "text-secondary hover:bg-surface-emphasis hover:text-primary",
             )}
           >
             {/* Active marker rather than relying on fill alone — reads at a

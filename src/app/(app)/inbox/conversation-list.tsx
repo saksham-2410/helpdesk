@@ -168,7 +168,7 @@ export function ConversationListPane({
                 href={`/inbox/${c.id}`}
                 style={{ "--i": i } as React.CSSProperties}
                 className={cn(
-                  "animate-rise flex gap-2.5 border-b border-border-subtle px-3.5 py-3 transition-colors hover:bg-paper-100 dark:hover:bg-paper-800",
+                  "animate-rise flex gap-2.5 border-b border-border-subtle px-3.5 py-3 transition-colors hover:bg-surface-emphasis",
                   selectedId === c.id && "bg-accent-soft hover:bg-accent-soft",
                 )}
               >
@@ -215,7 +215,7 @@ function FilterPill({
       onClick={onClick}
       className={cn(
         "rounded-xs px-2 py-0.5 text-[0.6875rem] font-medium transition-colors",
-        active ? "bg-accent text-accent-text" : "text-secondary hover:bg-paper-200 dark:hover:bg-paper-800",
+        active ? "bg-accent text-accent-text" : "text-secondary hover:bg-surface-emphasis",
       )}
     >
       {children}

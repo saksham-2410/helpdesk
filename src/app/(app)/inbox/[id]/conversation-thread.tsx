@@ -177,7 +177,7 @@ function ThreadHeader({
               role="button"
               tabIndex={0}
               aria-disabled={pending}
-              className="inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border border-border-default bg-surface px-2.5 text-[0.8125rem] font-medium shadow-low transition-colors hover:bg-paper-100 active:translate-y-px dark:hover:bg-paper-800 aria-disabled:pointer-events-none aria-disabled:opacity-45"
+              className="inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border border-border-default bg-surface px-2.5 text-[0.8125rem] font-medium shadow-low transition-colors hover:bg-surface-emphasis active:translate-y-px aria-disabled:pointer-events-none aria-disabled:opacity-45"
             >
               Snooze
             </span>
@@ -198,7 +198,7 @@ function ThreadHeader({
                   handleSnooze(preset);
                   e.currentTarget.closest("details")?.removeAttribute("open");
                 }}
-                className="block w-full px-3 py-1.5 text-left text-xs hover:bg-paper-100 dark:hover:bg-paper-800"
+                className="block w-full px-3 py-1.5 text-left text-xs hover:bg-surface-emphasis"
               >
                 {label}
               </button>
