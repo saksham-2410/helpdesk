@@ -8,6 +8,7 @@ import { Textarea, Select } from "@/components/ui/field";
 import { Avatar, ChannelBadge, StatusPill } from "@/components/ui/badge";
 import { compactRelativeTime, contactDisplayName } from "@/lib/inbox/format";
 import type { ConversationDetail, Message, WorkspaceMemberOption } from "@/lib/inbox/types";
+import { SummaryPanel } from "./summary-panel";
 import {
   assignConversation,
   setConversationStatus,
@@ -87,6 +88,7 @@ export function ConversationThread({
       />
 
       <div ref={bodyRef} className="flex-1 overflow-y-auto bg-canvas px-6 py-5">
+        <SummaryPanel conversationId={conversation.id} messageCount={messages.length} />
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {messages.map((m) => (
             <MessageRow key={m.id} message={m} currentUserId={currentUserId} members={members} />
