@@ -1,12 +1,73 @@
-import { PageHeader, EmptyState } from "@/components/ui/empty-state";
+import Link from "next/link";
+import { PageHeader } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import { CopyCode } from "@/components/ui/copy-code";
+import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
+import { requireWorkspace } from "@/lib/auth/workspace";
+import { env } from "@/lib/env";
+import { TeamSection, type Member, type PendingInvite } from "./team-section";
 
 export const metadata = { title: "Settings" };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const workspace = await requireWorkspace();
+  const user = await getCurrentUser();
+  const supabase = await createServerSupabase();
+
+  // Cast rather than `.returns<T>()`: without generated Database types wired
+  // into the client, that helper's inference fights itself on an RPC that
+  // returns a set of rows. Plain casts are fine here — both shapes are
+  // narrow, hand-written, and match their SQL definitions in 0005.
+  const [{ data: membersData }, { data: invitesData }] = await Promise.all([
+    supabase.rpc("list_workspace_members", { ws: workspace.id }),
+    supabase
+      .from("invites")
+      .select("id, email, role, expires_at")
+      .eq("workspace_id", workspace.id)
+      .is("accepted_at", null)
+      .order("created_at", { ascending: true }),
+  ]);
+  const members = (membersData ?? []) as Member[];
+  const invites = (invitesData ?? []) as PendingInvite[];
+
+  const snippet = `<script src="${env.appUrl}/widget.js" data-workspace="${workspace.slug}" defer></script>`;
+
   return (
     <>
-      <PageHeader title="Settings" description="Team, widget, email, and custom domains." />
-      <EmptyState title="Settings" description="Team management lands here next." />
+      <PageHeader title="Settings" description="Team, widget install, and workspace details." />
+
+      <div className="mx-auto w-full max-w-2xl space-y-10 overflow-y-auto px-6 py-8">
+        <section>
+          <h2 className="mb-1 font-serif text-xl">{workspace.name}</h2>
+          <p className="text-machine">/{workspace.slug}</p>
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-serif text-xl">Chat widget</h2>
+            <Link href={`/demo?workspace=${workspace.slug}`} target="_blank">
+              <Button variant="secondary" size="sm">
+                Open demo page
+              </Button>
+            </Link>
+          </div>
+          <p className="mb-3 text-sm leading-relaxed text-secondary">
+            Paste this before the closing <code className="text-machine">&lt;/body&gt;</code> tag
+            of any site to install live chat.
+          </p>
+          <CopyCode code={snippet} />
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-serif text-xl">Team</h2>
+          <TeamSection
+            members={members}
+            invites={invites}
+            currentUserId={user!.id}
+            isAdmin={workspace.role === "admin"}
+          />
+        </section>
+      </div>
     </>
   );
 }
