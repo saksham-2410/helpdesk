@@ -8,6 +8,7 @@ import { Textarea, Select } from "@/components/ui/field";
 import { Avatar, ChannelBadge, StatusPill } from "@/components/ui/badge";
 import { compactRelativeTime, contactDisplayName } from "@/lib/inbox/format";
 import type { ConversationDetail, Message, WorkspaceMemberOption } from "@/lib/inbox/types";
+import type { CannedResponse } from "@/lib/canned/types";
 import { SummaryPanel } from "./summary-panel";
 import {
   assignConversation,
@@ -35,11 +36,13 @@ export function ConversationThread({
   initialMessages,
   members,
   currentUserId,
+  cannedResponses,
 }: {
   conversation: ConversationDetail;
   initialMessages: Message[];
   members: WorkspaceMemberOption[];
   currentUserId: string;
+  cannedResponses: CannedResponse[];
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState(conversation.status);
@@ -130,7 +133,7 @@ export function ConversationThread({
         </div>
       </div>
 
-      <Composer conversation={conversation} />
+      <Composer conversation={conversation} cannedResponses={cannedResponses} />
     </>
   );
 }
@@ -322,15 +325,35 @@ function SendButton() {
   );
 }
 
-function Composer({ conversation }: { conversation: ConversationDetail }) {
+/** Matches when the ENTIRE draft is "/" plus letters/numbers/hyphens — a
+ *  canned response starts a reply, it doesn't insert mid-sentence, so
+ *  matching only from the start keeps this unambiguous. */
+const CANNED_TRIGGER = /^\/([a-z0-9-]*)$/i;
+
+function Composer({
+  conversation,
+  cannedResponses,
+}: {
+  conversation: ConversationDetail;
+  cannedResponses: CannedResponse[];
+}) {
   const action = conversation.channel === "email" ? sendEmailReplyAction : sendChatReplyAction;
   const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Typing signal is chat-only — an email reply has no live recipient on the
   // other end to show it to. Mirrors the widget's own send/debounce shape
   // (src/widget/index.ts) so both sides behave the same way.
   const isChat = conversation.channel === "chat";
   const typingActive = useRef(false);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [cannedQuery, setCannedQuery] = useState<string | null>(null);
+
+  const cannedMatches =
+    cannedQuery !== null
+      ? cannedResponses
+          .filter((r) => r.shortcut.startsWith(cannedQuery.toLowerCase()))
+          .slice(0, 6)
+      : [];
 
   function stopTypingSignal() {
     if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
@@ -339,6 +362,16 @@ function Composer({ conversation }: { conversation: ConversationDetail }) {
       typingActive.current = false;
       void sendTypingSignal(conversation.id, false);
     }
+  }
+
+  function insertCanned(response: CannedResponse) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.value = response.body_text;
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    setCannedQuery(null);
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
   }
 
   const [state, formAction] = useActionState<ActionState, FormData>(async (_prev, formData) => {
@@ -359,14 +392,36 @@ function Composer({ conversation }: { conversation: ConversationDetail }) {
       action={formAction}
       className="relative flex items-end gap-2.5 border-t border-border-subtle bg-surface px-5 py-3.5"
     >
+      {cannedQuery !== null && cannedMatches.length > 0 && (
+        <ul className="absolute inset-x-5 bottom-full z-10 mb-1.5 overflow-hidden rounded-md border border-border-default bg-surface-raised py-1 shadow-mid">
+          {cannedMatches.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => insertCanned(r)}
+                className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-surface-emphasis"
+              >
+                <span className="text-machine !text-accent">/{r.shortcut}</span>
+                <span className="truncate text-[0.8125rem]">{r.title}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <Textarea
+        ref={textareaRef}
         name="text"
         placeholder={
-          conversation.channel === "email" ? "Write an email reply…" : "Write a message…"
+          conversation.channel === "email"
+            ? "Write an email reply… (try /shortcut)"
+            : "Write a message… (try /shortcut)"
         }
         required
         className="min-h-[44px]"
-        onChange={() => {
+        onChange={(e) => {
+          const match = e.target.value.match(CANNED_TRIGGER);
+          setCannedQuery(match ? match[1] : null);
+
           if (!isChat) return;
           if (!typingActive.current) {
             typingActive.current = true;
@@ -376,6 +431,17 @@ function Composer({ conversation }: { conversation: ConversationDetail }) {
           typingStopTimer.current = setTimeout(stopTypingSignal, TYPING_STOP_DELAY_MS);
         }}
         onKeyDown={(e) => {
+          if (cannedQuery !== null && cannedMatches.length > 0) {
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              insertCanned(cannedMatches[0]!);
+              return;
+            }
+            if (e.key === "Escape") {
+              setCannedQuery(null);
+              return;
+            }
+          }
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();

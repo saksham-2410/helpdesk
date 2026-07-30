@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { getConversation, listMessages, listMembers } from "@/lib/inbox/data";
+import { listCannedResponses } from "@/lib/canned/data";
 import { ConversationThread } from "./conversation-thread";
 
 export default async function ConversationPage({
@@ -18,10 +19,11 @@ export default async function ConversationPage({
   // (or one that doesn't exist) simply returns null here — no separate
   // workspace_id check needed, and nothing distinguishes "not found" from
   // "not yours" to the client, which is the correct behavior either way.
-  const [conversation, messages, members] = await Promise.all([
+  const [conversation, messages, members, cannedResponses] = await Promise.all([
     getConversation(supabase, id),
     listMessages(supabase, id),
     listMembers(supabase, workspace.id),
+    listCannedResponses(supabase, workspace.id),
   ]);
 
   if (!conversation) notFound();
@@ -32,6 +34,7 @@ export default async function ConversationPage({
       initialMessages={messages}
       members={members}
       currentUserId={user!.id}
+      cannedResponses={cannedResponses}
     />
   );
 }

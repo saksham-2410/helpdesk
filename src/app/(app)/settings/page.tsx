@@ -8,6 +8,8 @@ import { env, features } from "@/lib/env";
 import { replyToAddress } from "@/lib/email/threading";
 import { TeamSection, type Member, type PendingInvite } from "./team-section";
 import { DomainsSection, type WorkspaceDomain } from "./domains-section";
+import { CannedSection } from "./canned-section";
+import { listCannedResponses } from "@/lib/canned/data";
 
 export const metadata = { title: "Settings" };
 
@@ -20,20 +22,22 @@ export default async function SettingsPage() {
   // into the client, that helper's inference fights itself on an RPC that
   // returns a set of rows. Plain casts are fine here — both shapes are
   // narrow, hand-written, and match their SQL definitions in 0005.
-  const [{ data: membersData }, { data: invitesData }, { data: domainsData }] = await Promise.all([
-    supabase.rpc("list_workspace_members", { ws: workspace.id }),
-    supabase
-      .from("invites")
-      .select("id, email, role, expires_at")
-      .eq("workspace_id", workspace.id)
-      .is("accepted_at", null)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("workspace_domains")
-      .select("id, domain, status, verification, last_error")
-      .eq("workspace_id", workspace.id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: membersData }, { data: invitesData }, { data: domainsData }, cannedResponses] =
+    await Promise.all([
+      supabase.rpc("list_workspace_members", { ws: workspace.id }),
+      supabase
+        .from("invites")
+        .select("id, email, role, expires_at")
+        .eq("workspace_id", workspace.id)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("workspace_domains")
+        .select("id, domain, status, verification, last_error")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: true }),
+      listCannedResponses(supabase, workspace.id),
+    ]);
   const members = (membersData ?? []) as Member[];
   const invites = (invitesData ?? []) as PendingInvite[];
   const domains = (domainsData ?? []) as WorkspaceDomain[];
@@ -92,6 +96,8 @@ export default async function SettingsPage() {
             isAdmin={workspace.role === "admin"}
           />
         </section>
+
+        <CannedSection responses={cannedResponses} />
 
         <DomainsSection
           domains={domains}
