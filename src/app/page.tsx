@@ -35,8 +35,8 @@ export default async function LandingPage() {
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
         <div className="flex items-baseline gap-2">
-          <span className="font-serif text-xl leading-none">Helpdesk</span>
-          <span className="size-1.5 rounded-full bg-signal-500" aria-hidden />
+          <span className="font-serif text-3xl leading-none">Helpdesk</span>
+          <span className="size-2 rounded-full bg-signal-500" aria-hidden />
         </div>
         <nav className="flex items-center gap-2">
           <Link href="/demo">
@@ -95,7 +95,7 @@ export default async function LandingPage() {
         </section>
 
         <footer className="mt-20 flex flex-wrap items-center justify-between gap-4 border-t border-border-subtle py-8 text-xs text-muted">
-          <p>Built for the SuperProfile Member of Technical Staff assignment.</p>
+          <p>Helpdesk — chat, email, and a knowledge base in one inbox.</p>
           <Link href="/styleguide" className="hover:text-secondary">
             Design system
           </Link>

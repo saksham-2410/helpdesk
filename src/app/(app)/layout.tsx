@@ -29,8 +29,8 @@ export default async function AppLayout({
       <aside className="flex w-[228px] shrink-0 flex-col border-r border-border-subtle bg-surface">
         <div className="px-4 pb-3 pt-4">
           <div className="flex items-baseline gap-1.5">
-            <span className="font-serif text-lg leading-none">Helpdesk</span>
-            <span className="size-1 rounded-full bg-signal-500" aria-hidden />
+            <span className="font-serif text-xl leading-none">Helpdesk</span>
+            <span className="size-1.5 rounded-full bg-signal-500" aria-hidden />
           </div>
           <div className="mt-3 flex items-center gap-2 rounded-md border border-border-subtle bg-canvas px-2.5 py-2">
             <Avatar name={workspace.name} size="sm" />

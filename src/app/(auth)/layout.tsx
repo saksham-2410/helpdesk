@@ -25,8 +25,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           href="/"
           className="relative z-10 inline-flex items-baseline gap-2 text-paper-50"
         >
-          <span className="font-serif text-2xl leading-none">Helpdesk</span>
-          <span className="size-1.5 rounded-full bg-signal-400" aria-hidden />
+          <span className="font-serif text-3xl leading-none">Helpdesk</span>
+          <span className="size-2 rounded-full bg-signal-400" aria-hidden />
         </Link>
 
         <div className="relative z-10 max-w-md">
@@ -63,8 +63,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             href="/"
             className="mb-10 inline-flex items-baseline gap-2 lg:hidden"
           >
-            <span className="font-serif text-2xl leading-none">Helpdesk</span>
-            <span className="size-1.5 rounded-full bg-signal-500" aria-hidden />
+            <span className="font-serif text-3xl leading-none">Helpdesk</span>
+            <span className="size-2 rounded-full bg-signal-500" aria-hidden />
           </Link>
           {children}
         </div>
