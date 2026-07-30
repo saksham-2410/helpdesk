@@ -37,12 +37,14 @@ export function ConversationThread({
   members,
   currentUserId,
   cannedResponses,
+  aiEnabled,
 }: {
   conversation: ConversationDetail;
   initialMessages: Message[];
   members: WorkspaceMemberOption[];
   currentUserId: string;
   cannedResponses: CannedResponse[];
+  aiEnabled: boolean;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState(conversation.status);
@@ -133,7 +135,7 @@ export function ConversationThread({
         </div>
       </div>
 
-      <Composer conversation={conversation} cannedResponses={cannedResponses} />
+      <Composer conversation={conversation} cannedResponses={cannedResponses} aiEnabled={aiEnabled} />
     </>
   );
 }
@@ -333,9 +335,11 @@ const CANNED_TRIGGER = /^\/([a-z0-9-]*)$/i;
 function Composer({
   conversation,
   cannedResponses,
+  aiEnabled,
 }: {
   conversation: ConversationDetail;
   cannedResponses: CannedResponse[];
+  aiEnabled: boolean;
 }) {
   const action = conversation.channel === "email" ? sendEmailReplyAction : sendChatReplyAction;
   const formRef = useRef<HTMLFormElement>(null);
@@ -374,6 +378,15 @@ function Composer({
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
 
+  function insertDraft(text: string) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.value = text;
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
   const [state, formAction] = useActionState<ActionState, FormData>(async (_prev, formData) => {
     if (isChat) stopTypingSignal();
     const result = await action(conversation.id, formData);
@@ -390,7 +403,7 @@ function Composer({
     <form
       ref={formRef}
       action={formAction}
-      className="relative flex items-end gap-2.5 border-t border-border-subtle bg-surface px-5 py-3.5"
+      className="relative border-t border-border-subtle bg-surface px-5 py-3.5"
     >
       {cannedQuery !== null && cannedMatches.length > 0 && (
         <ul className="absolute inset-x-5 bottom-full z-10 mb-1.5 overflow-hidden rounded-md border border-border-default bg-surface-raised py-1 shadow-mid">
@@ -408,50 +421,117 @@ function Composer({
           ))}
         </ul>
       )}
-      <Textarea
-        ref={textareaRef}
-        name="text"
-        placeholder={
-          conversation.channel === "email"
-            ? "Write an email reply… (try /shortcut)"
-            : "Write a message… (try /shortcut)"
-        }
-        required
-        className="min-h-[44px]"
-        onChange={(e) => {
-          const match = e.target.value.match(CANNED_TRIGGER);
-          setCannedQuery(match ? match[1] : null);
 
-          if (!isChat) return;
-          if (!typingActive.current) {
-            typingActive.current = true;
-            void sendTypingSignal(conversation.id, true);
+      {aiEnabled && (
+        <div className="mb-2">
+          <SuggestReplyButton conversationId={conversation.id} onDraft={insertDraft} />
+        </div>
+      )}
+
+      <div className="flex items-end gap-2.5">
+        <Textarea
+          ref={textareaRef}
+          name="text"
+          placeholder={
+            conversation.channel === "email"
+              ? "Write an email reply… (try /shortcut)"
+              : "Write a message… (try /shortcut)"
           }
-          if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-          typingStopTimer.current = setTimeout(stopTypingSignal, TYPING_STOP_DELAY_MS);
-        }}
-        onKeyDown={(e) => {
-          if (cannedQuery !== null && cannedMatches.length > 0) {
-            if (e.key === "Enter" || e.key === "Tab") {
+          required
+          className="min-h-[44px]"
+          onChange={(e) => {
+            const match = e.target.value.match(CANNED_TRIGGER);
+            setCannedQuery(match ? match[1] : null);
+
+            if (!isChat) return;
+            if (!typingActive.current) {
+              typingActive.current = true;
+              void sendTypingSignal(conversation.id, true);
+            }
+            if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+            typingStopTimer.current = setTimeout(stopTypingSignal, TYPING_STOP_DELAY_MS);
+          }}
+          onKeyDown={(e) => {
+            if (cannedQuery !== null && cannedMatches.length > 0) {
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                insertCanned(cannedMatches[0]!);
+                return;
+              }
+              if (e.key === "Escape") {
+                setCannedQuery(null);
+                return;
+              }
+            }
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              insertCanned(cannedMatches[0]!);
-              return;
+              e.currentTarget.form?.requestSubmit();
             }
-            if (e.key === "Escape") {
-              setCannedQuery(null);
-              return;
-            }
-          }
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }
-        }}
-      />
-      <SendButton />
+          }}
+        />
+        <SendButton />
+      </div>
       {state.error && (
         <p className="absolute -top-5 left-5 text-xs text-danger-500">{state.error}</p>
       )}
     </form>
+  );
+}
+
+function SuggestReplyButton({
+  conversationId,
+  onDraft,
+}: {
+  conversationId: string;
+  onDraft: (text: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/draft-reply`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        // "unavailable" (no AI key) fails the same as any other error here —
+        // the button stays visible either way since aiEnabled already
+        // reflects server config, so reaching this case means something
+        // else went wrong (timeout, quota, malformed response).
+        setError(data.error ?? "Could not generate a draft.");
+      } else {
+        onDraft(data.draft);
+      }
+    } catch {
+      setError("Could not generate a draft.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="relative inline-block">
+      <Button type="button" variant="subtle" size="sm" loading={loading} onClick={handleClick}>
+        <SparkleIcon />
+        {loading ? "Drafting…" : "Suggest reply"}
+      </Button>
+      {error && (
+        <p className="absolute left-0 top-full z-10 mt-1 w-64 text-xs text-danger-500">{error}</p>
+      )}
+    </div>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-3.5" aria-hidden>
+      <path
+        d="M8 2.5c.3 1.7 1 2.9 2.1 3.6.9.6 2 .9 3.4 1-1.4.1-2.5.4-3.4 1C9 8.8 8.3 10 8 11.7c-.3-1.7-1-2.9-2.1-3.6-.9-.6-2-.9-3.4-1 1.4-.1 2.5-.4 3.4-1C6.9 5.4 7.6 4.2 8 2.5Z"
+        fill="currentColor"
+      />
+    </svg>
   );
 }

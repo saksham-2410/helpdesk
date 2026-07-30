@@ -3,6 +3,7 @@ import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { getConversation, listMessages, listMembers } from "@/lib/inbox/data";
 import { listCannedResponses } from "@/lib/canned/data";
+import { features } from "@/lib/env";
 import { ConversationThread } from "./conversation-thread";
 
 export default async function ConversationPage({
@@ -35,6 +36,7 @@ export default async function ConversationPage({
       members={members}
       currentUserId={user!.id}
       cannedResponses={cannedResponses}
+      aiEnabled={features.ai}
     />
   );
 }

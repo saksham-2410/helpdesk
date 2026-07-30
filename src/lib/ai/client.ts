@@ -14,7 +14,12 @@ import type { ConversationSummary } from "./types";
  * node_modules/@google/genai/dist/genai.d.ts before writing this.
  */
 
-const TIMEOUT_MS = 10_000;
+// Measured directly against the live API with this model + JSON schema +
+// system instruction: 14-25s is normal, not an outlier — a 10s budget was
+// aborting almost every real call. 25s leaves headroom under a 30s function
+// timeout while still giving the fallback path (stale cache / error) a
+// chance to fire for genuinely stuck requests.
+const TIMEOUT_MS = 25_000;
 
 const SUMMARY_SCHEMA = {
   type: Type.OBJECT,
@@ -121,6 +126,78 @@ export async function summarizeConversation(
       throw new Error("Malformed summary shape from Gemini.");
     }
     return parsed;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const DRAFT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    draft_reply: { type: Type.STRING },
+  },
+  required: ["draft_reply"],
+};
+
+const DRAFT_SYSTEM_INSTRUCTION = `You draft reply messages for a customer support agent — write as the
+agent, first person, addressing the customer directly. Base the reply ONLY
+on the conversation so far and the help-article excerpts provided; never
+invent a policy, price, timeline, or fact that isn't in either. If nothing
+provided actually answers the customer's question, write a brief reply
+acknowledging what they asked and saying you're looking into it rather than
+guessing. This text is inserted directly into the agent's reply box, so:
+plain text only (no markdown, no subject line), and skip a greeting or
+sign-off unless the conversation's own tone clearly calls for one — the
+agent may still want to edit it before sending.`;
+
+interface DraftReplyInput {
+  messages: { authorType: string; bodyText: string }[];
+  contactName: string | null;
+  articles: { title: string; content: string }[];
+}
+
+function buildDraftPrompt({ messages, contactName, articles }: DraftReplyInput): string {
+  const parts: string[] = [];
+  parts.push(`Customer: ${contactName ?? "unknown"}`);
+  parts.push(
+    "Conversation so far:",
+    messages.map((m) => `[${m.authorType}] ${m.bodyText}`).join("\n"),
+  );
+  if (articles.length > 0) {
+    parts.push(
+      "Relevant help articles (use only if actually relevant):",
+      articles.map((a) => `- ${a.title}${a.content ? `: ${a.content}` : ""}`).join("\n"),
+    );
+  }
+  return parts.join("\n\n");
+}
+
+/** Throws on any failure — the caller decides what the agent sees; this
+ *  never auto-sends, it only ever fills the composer for the agent to
+ *  review and edit. */
+export async function draftReply(input: DraftReplyInput): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await getClient().models.generateContent({
+      model: env.geminiModel,
+      contents: buildDraftPrompt(input),
+      config: {
+        abortSignal: controller.signal,
+        systemInstruction: DRAFT_SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: DRAFT_SCHEMA,
+        temperature: 0.4,
+      },
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from Gemini.");
+
+    const parsed = JSON.parse(text) as { draft_reply: string };
+    if (!parsed.draft_reply) throw new Error("Malformed draft response from Gemini.");
+    return parsed.draft_reply;
   } finally {
     clearTimeout(timer);
   }

@@ -12,6 +12,9 @@ import { features } from "@/lib/env";
  * does in the inbox UI, and there is no separate authorization check to get
  * wrong.
  */
+// Same latency profile as draft-reply — see the comment there.
+export const maxDuration = 30;
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -118,3 +118,28 @@ export async function searchArticles(
   }
   return data as KbSearchResult[];
 }
+
+/**
+ * search_kb_articles only returns the author-written excerpt (short, often
+ * vague teaser text) — fine for a "here's what might help" link, but not
+ * enough for the AI draft-reply to ground concrete steps in without either
+ * inventing detail or refusing to answer. This fetches the actual body for
+ * a known set of already-published article ids.
+ */
+export async function getArticleBodies(
+  supabase: SupabaseClient,
+  articleIds: string[],
+): Promise<Record<string, string>> {
+  if (articleIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("kb_articles")
+    .select("id, body_text")
+    .in("id", articleIds);
+
+  if (error) {
+    console.error("[kb] getArticleBodies failed", error);
+    return {};
+  }
+  return Object.fromEntries(data.map((a) => [a.id as string, a.body_text as string]));
+}
