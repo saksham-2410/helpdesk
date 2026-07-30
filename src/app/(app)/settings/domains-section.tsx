@@ -60,7 +60,7 @@ export function DomainsSection({
 }) {
   return (
     <section>
-      <h2 className="mb-1 font-serif text-xl">Custom domain</h2>
+      <h2 className="mb-1 text-xl font-semibold">Custom domain</h2>
       <p className="mb-3 text-sm leading-relaxed text-secondary">
         Serve your public help centre on your own domain instead of this app&apos;s.
         {!customDomainsAutomated && (

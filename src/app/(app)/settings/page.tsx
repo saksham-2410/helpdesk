@@ -54,13 +54,13 @@ export default async function SettingsPage() {
 
       <div className="mx-auto w-full max-w-2xl space-y-10 overflow-y-auto px-6 py-8">
         <section>
-          <h2 className="mb-1 font-serif text-xl">{workspace.name}</h2>
+          <h2 className="mb-1 text-xl font-semibold">{workspace.name}</h2>
           <p className="text-machine">/{workspace.slug}</p>
         </section>
 
         <section>
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="font-serif text-xl">Chat widget</h2>
+            <h2 className="text-xl font-semibold">Chat widget</h2>
             <Link href={`/demo?workspace=${workspace.slug}`} target="_blank">
               <Button variant="secondary" size="sm">
                 Open demo page
@@ -76,7 +76,7 @@ export default async function SettingsPage() {
 
         {supportAddress && (
           <section>
-            <h2 className="mb-3 font-serif text-xl">Email</h2>
+            <h2 className="mb-3 text-xl font-semibold">Email</h2>
             <p className="mb-3 text-sm leading-relaxed text-secondary">
               Publish this as your support address — anything sent to it lands in your Inbox as a
               new conversation, and replies thread automatically in the customer&apos;s mail client.
@@ -88,7 +88,7 @@ export default async function SettingsPage() {
         )}
 
         <section>
-          <h2 className="mb-3 font-serif text-xl">Team</h2>
+          <h2 className="mb-3 text-xl font-semibold">Team</h2>
           <TeamSection
             members={members}
             invites={invites}

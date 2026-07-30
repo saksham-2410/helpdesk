@@ -92,7 +92,7 @@ export default async function AnalyticsPage({
 
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-lg border border-border-subtle bg-surface p-4">
-            <h2 className="mb-3 font-serif text-lg">By channel</h2>
+            <h2 className="mb-3 text-lg font-semibold">By channel</h2>
             {channels.length === 0 ? (
               <p className="text-sm text-muted">No conversations in this range.</p>
             ) : (
@@ -111,13 +111,13 @@ export default async function AnalyticsPage({
           </section>
 
           <section className="rounded-lg border border-border-subtle bg-surface p-4">
-            <h2 className="mb-3 font-serif text-lg">Busiest hours</h2>
+            <h2 className="mb-3 text-lg font-semibold">Busiest hours</h2>
             <HourlyChart hours={hours} />
           </section>
         </div>
 
         <section className="rounded-lg border border-border-subtle bg-surface">
-          <h2 className="border-b border-border-subtle px-4 py-3 font-serif text-lg">
+          <h2 className="border-b border-border-subtle px-4 py-3 text-lg font-semibold">
             By agent
           </h2>
           {agents.length === 0 ? (
@@ -162,7 +162,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border-subtle bg-surface px-3.5 py-3">
       <p className="label-eyebrow">{label}</p>
-      <p className="mt-1 font-serif text-2xl leading-none">{value}</p>
+      <p className="mt-1 text-2xl font-semibold leading-none">{value}</p>
     </div>
   );
 }

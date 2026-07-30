@@ -52,7 +52,7 @@ function AddCannedForm() {
 export function CannedSection({ responses }: { responses: CannedResponse[] }) {
   return (
     <section>
-      <h2 className="mb-1 font-serif text-xl">Canned responses</h2>
+      <h2 className="mb-1 text-xl font-semibold">Canned responses</h2>
       <p className="mb-3 text-sm leading-relaxed text-secondary">
         Type <code className="text-machine">/shortcut</code> in the inbox composer to insert one
         instantly — works for both chat and email replies.
