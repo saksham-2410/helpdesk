@@ -79,6 +79,20 @@ export const env = {
     return optional("GEMINI_MODEL") ?? "gemini-3.6-flash";
   },
 
+  // Cross-provider fallback for when Gemini itself is unavailable, not just
+  // this one model — see lib/ai/fallback.ts. Optional: without it, a Gemini
+  // outage degrades to the existing stale-cache/error behavior instead of a
+  // second provider.
+  get openrouterApiKey() {
+    return optional("OPENROUTER_API_KEY");
+  },
+  get openrouterModel() {
+    // A free-tier model by default so this costs nothing to turn on. Free
+    // model availability on OpenRouter rotates — check openrouter.ai/models
+    // (filter: free) if this one has been retired.
+    return optional("OPENROUTER_MODEL") ?? "meta-llama/llama-3.3-70b-instruct:free";
+  },
+
   get vercelToken() {
     return optional("VERCEL_TOKEN");
   },
@@ -94,6 +108,11 @@ export const env = {
 export const features = {
   get ai() {
     return Boolean(optional("GEMINI_API_KEY"));
+  },
+  /** Whether a second provider is configured to take over if Gemini's
+   *  circuit breaker trips — see lib/ai/client.ts. */
+  get aiFallback() {
+    return Boolean(optional("OPENROUTER_API_KEY"));
   },
   get email() {
     return Boolean(optional("RESEND_API_KEY") && optional("EMAIL_DOMAIN"));

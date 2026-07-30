@@ -1,11 +1,21 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { env } from "@/lib/env";
+import { env, features } from "@/lib/env";
 import type { ConversationSummary } from "./types";
+import {
+  buildSummaryPrompt,
+  buildDraftPrompt,
+  SUMMARY_SYSTEM_INSTRUCTION,
+  DRAFT_SYSTEM_INSTRUCTION,
+  type SummarizeInput,
+  type DraftReplyInput,
+} from "./prompts";
+import { summarizeConversationFallback, draftReplyFallback } from "./fallback";
 
 /**
- * The only file in the app that imports @google/genai. Swapping providers
- * later is a one-file change — nothing else here even knows the vendor name.
+ * The only file that imports @google/genai. Swapping the *primary* provider
+ * is a one-file change here; the *fallback* provider lives in fallback.ts —
+ * see the circuit breaker below for how the two connect.
  *
  * @google/genai 2.13.0's actual surface is the plain `ai.models.generateContent
  * ({ model, contents, config })` shape below — earlier planning notes
@@ -17,9 +27,39 @@ import type { ConversationSummary } from "./types";
 // Measured directly against the live API with this model + JSON schema +
 // system instruction: 14-25s is normal, not an outlier — a 10s budget was
 // aborting almost every real call. 25s leaves headroom under a 30s function
-// timeout while still giving the fallback path (stale cache / error) a
-// chance to fire for genuinely stuck requests.
+// timeout while still giving the fallback path a chance to fire for
+// genuinely stuck requests.
 const TIMEOUT_MS = 25_000;
+
+/**
+ * Soft, in-memory circuit breaker on Gemini specifically — same posture and
+ * same limitation as lib/rate-limit.ts (doesn't coordinate across
+ * instances/regions, resets on process restart; acceptable at this scale).
+ *
+ * Gemini's free tier is quota-limited per day (empirically: real requests
+ * against this project's key started returning 429 RESOURCE_EXHAUSTED after
+ * ~20 calls in a day), so once it starts failing, every subsequent call in
+ * that window is guaranteed to fail identically. After a few consecutive
+ * failures, stop spending a 25s timeout finding that out again on every
+ * request and go straight to the fallback provider for a cooldown window,
+ * then let one call through to test recovery.
+ */
+const CIRCUIT_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 60_000;
+let consecutiveFailures = 0;
+let circuitOpenUntil = 0;
+
+function geminiCircuitOpen(): boolean {
+  return consecutiveFailures >= CIRCUIT_THRESHOLD && Date.now() < circuitOpenUntil;
+}
+function recordGeminiFailure() {
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= CIRCUIT_THRESHOLD) circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+}
+function recordGeminiSuccess() {
+  consecutiveFailures = 0;
+  circuitOpenUntil = 0;
+}
 
 const SUMMARY_SCHEMA = {
   type: Type.OBJECT,
@@ -46,21 +86,13 @@ const SUMMARY_SCHEMA = {
   ],
 };
 
-const SYSTEM_INSTRUCTION = `You summarize customer support conversations for a support agent who is
-about to pick one up. Be concrete and specific — quote the customer's actual
-words where it helps, never pad with generic filler. If a rolling summary of
-everything before the new messages is provided, treat it as ground truth and
-UPDATE it with what the new messages add or change; do not re-derive it from
-scratch or drop details it already established. Respond with the sentiment of
-the CUSTOMER (not the agent) as expressed in the most recent messages.`;
-
-interface SummarizeInput {
-  previousSummary: ConversationSummary | null;
-  /** Only the messages the previous summary has not already seen — the
-   *  incremental part of "incremental summarization". */
-  newMessages: { authorType: string; bodyText: string }[];
-  contactName: string | null;
-}
+const DRAFT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    draft_reply: { type: Type.STRING },
+  },
+  required: ["draft_reply"],
+};
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
@@ -68,46 +100,17 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-function buildPrompt({ previousSummary, newMessages, contactName }: SummarizeInput): string {
-  const parts: string[] = [];
-
-  parts.push(`Customer: ${contactName ?? "unknown"}`);
-
-  if (previousSummary) {
-    parts.push(
-      "Existing summary (covers everything before the new messages below):",
-      JSON.stringify(previousSummary, null, 2),
-    );
-  }
-
-  parts.push(
-    previousSummary ? "New messages since that summary:" : "Conversation so far:",
-    newMessages
-      .map((m) => `[${m.authorType}] ${m.bodyText}`)
-      .join("\n"),
-  );
-
-  return parts.join("\n\n");
-}
-
-/**
- * Throws on any failure — timeout, API error, or a response that doesn't
- * parse as the expected shape. lib/ai/summarize.ts is the layer that catches
- * this and decides what an agent sees (stale cache, or nothing).
- */
-export async function summarizeConversation(
-  input: SummarizeInput,
-): Promise<ConversationSummary> {
+async function callGeminiSummary(input: SummarizeInput): Promise<ConversationSummary> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     const response = await getClient().models.generateContent({
       model: env.geminiModel,
-      contents: buildPrompt(input),
+      contents: buildSummaryPrompt(input),
       config: {
         abortSignal: controller.signal,
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: SUMMARY_SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: SUMMARY_SCHEMA,
         temperature: 0.2,
@@ -131,51 +134,7 @@ export async function summarizeConversation(
   }
 }
 
-const DRAFT_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    draft_reply: { type: Type.STRING },
-  },
-  required: ["draft_reply"],
-};
-
-const DRAFT_SYSTEM_INSTRUCTION = `You draft reply messages for a customer support agent — write as the
-agent, first person, addressing the customer directly. Base the reply ONLY
-on the conversation so far and the help-article excerpts provided; never
-invent a policy, price, timeline, or fact that isn't in either. If nothing
-provided actually answers the customer's question, write a brief reply
-acknowledging what they asked and saying you're looking into it rather than
-guessing. This text is inserted directly into the agent's reply box, so:
-plain text only (no markdown, no subject line), and skip a greeting or
-sign-off unless the conversation's own tone clearly calls for one — the
-agent may still want to edit it before sending.`;
-
-interface DraftReplyInput {
-  messages: { authorType: string; bodyText: string }[];
-  contactName: string | null;
-  articles: { title: string; content: string }[];
-}
-
-function buildDraftPrompt({ messages, contactName, articles }: DraftReplyInput): string {
-  const parts: string[] = [];
-  parts.push(`Customer: ${contactName ?? "unknown"}`);
-  parts.push(
-    "Conversation so far:",
-    messages.map((m) => `[${m.authorType}] ${m.bodyText}`).join("\n"),
-  );
-  if (articles.length > 0) {
-    parts.push(
-      "Relevant help articles (use only if actually relevant):",
-      articles.map((a) => `- ${a.title}${a.content ? `: ${a.content}` : ""}`).join("\n"),
-    );
-  }
-  return parts.join("\n\n");
-}
-
-/** Throws on any failure — the caller decides what the agent sees; this
- *  never auto-sends, it only ever fills the composer for the agent to
- *  review and edit. */
-export async function draftReply(input: DraftReplyInput): Promise<string> {
+async function callGeminiDraft(input: DraftReplyInput): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -201,4 +160,58 @@ export async function draftReply(input: DraftReplyInput): Promise<string> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Throws only if BOTH Gemini and the fallback provider fail (or no fallback
+ * is configured) — lib/ai/summarize.ts is the layer that catches that and
+ * decides what an agent sees (stale cache, or nothing).
+ *
+ * Returns which model actually produced the result so callers that persist
+ * it (the summary cache) can record the truth instead of always crediting
+ * Gemini.
+ */
+export async function summarizeConversation(
+  input: SummarizeInput,
+): Promise<{ summary: ConversationSummary; model: string }> {
+  if (!geminiCircuitOpen()) {
+    try {
+      const summary = await callGeminiSummary(input);
+      recordGeminiSuccess();
+      return { summary, model: env.geminiModel };
+    } catch (err) {
+      recordGeminiFailure();
+      if (!features.aiFallback) throw err;
+      console.error("[ai] Gemini summarize failed, trying fallback provider", err);
+    }
+  } else if (!features.aiFallback) {
+    // Breaker open and nothing to fall back to — one real attempt is more
+    // useful to the caller than a synthetic "circuit open" error, since a
+    // stale cache is the caller's actual fallback either way.
+    return { summary: await callGeminiSummary(input), model: env.geminiModel };
+  }
+
+  const summary = await summarizeConversationFallback(input);
+  return { summary, model: `openrouter:${env.openrouterModel}` };
+}
+
+/** Never auto-sends — this only ever returns text for the caller to drop
+ *  into the composer for the agent to review and edit. Same Gemini-first,
+ *  fallback-on-failure behavior as summarizeConversation(). */
+export async function draftReply(input: DraftReplyInput): Promise<string> {
+  if (!geminiCircuitOpen()) {
+    try {
+      const draft = await callGeminiDraft(input);
+      recordGeminiSuccess();
+      return draft;
+    } catch (err) {
+      recordGeminiFailure();
+      if (!features.aiFallback) throw err;
+      console.error("[ai] Gemini draftReply failed, trying fallback provider", err);
+    }
+  } else if (!features.aiFallback) {
+    return callGeminiDraft(input);
+  }
+
+  return draftReplyFallback(input);
 }
