@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 
 export type WorkspaceRole = "admin" | "agent";
 
@@ -24,12 +24,13 @@ export interface ActiveWorkspace {
  * rather than a migration — noted as a deliberate deferral in the README.
  */
 export const getActiveWorkspace = cache(async (): Promise<ActiveWorkspace | null> => {
-  const supabase = await createServerSupabase();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getCurrentUser() is itself cache()-wrapped, so this shares the one
+  // getUser() network round trip other server components in the same render
+  // already paid for, rather than opening a second one.
+  const user = await getCurrentUser();
   if (!user) return null;
+
+  const supabase = await createServerSupabase();
 
   // `members_select`'s RLS policy scopes to "any row in a workspace I
   // belong to" (needed so the team directory can list co-members), not

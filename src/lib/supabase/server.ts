@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -39,11 +40,17 @@ export async function createServerSupabase() {
  * The signed-in user, or null. Uses getUser() rather than getSession():
  * getSession() reads the cookie without verifying it against the auth server,
  * so it can be spoofed by a forged cookie. Never authorize on getSession().
+ *
+ * Wrapped in React's `cache()` so the several server components that call
+ * this during one render (layout, page, nested data loaders) share a single
+ * round trip to the auth server instead of each paying for their own —
+ * getUser() is a real network call, not a local cookie decode, so this
+ * directly matters for perceived navigation speed.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-}
+});

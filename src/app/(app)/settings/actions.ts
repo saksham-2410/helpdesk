@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { sendInviteEmail } from "@/lib/email/send-invite";
 import { env } from "@/lib/env";
@@ -44,9 +44,7 @@ export async function createInvite(
 
   const supabase = await createServerSupabase();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { error: "Not signed in." };
 
   // Re-inviting an already-pending email replaces it rather than erroring —
