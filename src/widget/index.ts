@@ -121,7 +121,7 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
         <div class="status" data-online="false"><span class="dot"></span><span class="status-text">Connecting…</span></div>
       </div>
       <form class="prechat" hidden>
-        <p class="prechat-intro">Introduce yourself so we know who we're chatting with.</p>
+        <p class="prechat-intro">Hi there! Mind sharing your name before we get started?</p>
         <label class="prechat-field">
           <span>Name</span>
           <input type="text" name="name" required maxlength="120" autocomplete="name" placeholder="Jane Doe" />
