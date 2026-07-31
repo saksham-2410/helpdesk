@@ -105,24 +105,35 @@ export function ConversationListPane({
 
   useEffect(() => {
     const supabase = createBrowserSupabase();
+    // Private + broadcast (0009_broadcast_inbox.sql), not postgres_changes —
+    // a workspace-wide subscription over postgres_changes re-evaluates RLS
+    // once per subscriber per row change, which is O(agents x message rate)
+    // and the first thing to fall over in a busy shared inbox. The trigger
+    // in that migration broadcasts once per write instead; `private: true`
+    // is what makes the RLS policy on realtime.messages actually apply
+    // (Realtime Authorization) — the same authenticated session already
+    // used for every other RLS-scoped query on this page authorizes the
+    // channel automatically, no extra auth wiring needed here.
     const channel = supabase
-      .channel(`inbox:${workspaceId}`)
+      .channel(`inbox:${workspaceId}`, { config: { private: true } })
       .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        (payload: { new?: ConversationRow }) => {
-          const row = payload.new;
+        "broadcast",
+        { event: "*" },
+        (message: {
+          payload: {
+            operation: "INSERT" | "UPDATE" | "DELETE";
+            record: ConversationRow | null;
+            old_record: ConversationRow | null;
+          };
+        }) => {
+          const { operation, record, old_record } = message.payload;
+          const row = record ?? old_record;
           if (!row) return;
 
           setConversations((prev) => {
             const existing = prev.find((c) => c.id === row.id);
 
-            if (!rowMatchesFilters(row, filtersRef.current)) {
+            if (operation === "DELETE" || !rowMatchesFilters(row, filtersRef.current)) {
               return existing ? prev.filter((c) => c.id !== row.id) : prev;
             }
 
