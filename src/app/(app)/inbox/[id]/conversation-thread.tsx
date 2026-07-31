@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { useFormStatus } from "react-dom";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Textarea, Select } from "@/components/ui/field";
+import { Textarea, Select, Input } from "@/components/ui/field";
 import { Avatar, ChannelBadge, StatusPill } from "@/components/ui/badge";
 import { compactRelativeTime, contactDisplayName } from "@/lib/inbox/format";
 import type { ConversationDetail, Message, WorkspaceMemberOption } from "@/lib/inbox/types";
@@ -18,6 +18,7 @@ import {
   sendEmailReplyAction,
   markConversationRead,
   sendTypingSignal,
+  updateContactName,
   type ActionState,
 } from "../actions";
 
@@ -186,7 +187,11 @@ function ThreadHeader({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <ChannelBadge channel={conversation.channel} />
-          <p className="truncate text-sm font-medium">{contactDisplayName(conversation.contact)}</p>
+          {conversation.contact ? (
+            <ContactNameField contact={conversation.contact} />
+          ) : (
+            <p className="truncate text-sm font-medium">Unknown</p>
+          )}
           <StatusPill status={status} />
         </div>
         {conversation.contact?.email && (
@@ -255,6 +260,86 @@ function ThreadHeader({
         {status === "resolved" ? "Reopen" : "Resolve"}
       </Button>
     </header>
+  );
+}
+
+/**
+ * Chat visitors who skip (or predate) the widget's pre-chat form show up as
+ * "Unknown" — clicking the name lets an agent set it once they learn it,
+ * rather than leaving the conversation stuck unidentified forever.
+ */
+function ContactNameField({
+  contact,
+}: {
+  contact: { id: string; name: string | null; email: string | null };
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(contact.name ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  function startEditing() {
+    setValue(contact.name ?? "");
+    setError(null);
+    setEditing(true);
+  }
+
+  function save() {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setError("Name is required.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await updateContactName(contact.id, trimmed);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setEditing(false);
+    });
+  }
+
+  if (editing) {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              save();
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          disabled={pending}
+          maxLength={120}
+          className="!h-6 w-40 px-1.5 text-sm"
+        />
+        <Button type="button" size="sm" variant="ghost" className="!h-6 !px-1.5" disabled={pending} onClick={save}>
+          Save
+        </Button>
+        {error && <span className="text-machine text-danger-text">{error}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEditing}
+      title="Click to set this contact's name"
+      className="truncate text-left text-sm font-medium hover:underline"
+    >
+      {contactDisplayName(contact)}
+    </button>
   );
 }
 

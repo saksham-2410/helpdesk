@@ -82,6 +82,22 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
     visitorId = generateId();
   }
 
+  // Known once the pre-chat form has been submitted (this visit or a past
+  // one) — gates whether opening the bubble shows the form or goes straight
+  // to the conversation. Not required to actually start a session (an agent
+  // can still identify a nameless visitor later), so a storage failure here
+  // just means asking again next time rather than blocking the widget.
+  const nameStorageKey = `hd_visitor_name:${workspaceSlug}`;
+  const emailStorageKey = `hd_visitor_email:${workspaceSlug}`;
+  let visitorName: string | null = null;
+  let visitorEmail: string | null = null;
+  try {
+    visitorName = localStorage.getItem(nameStorageKey);
+    visitorEmail = localStorage.getItem(emailStorageKey);
+  } catch {
+    // Private browsing / storage disabled — same posture as visitorId above.
+  }
+
   const api = createWidgetApi(__HD_API_BASE__, workspaceSlug);
 
   const host = document.createElement("div");
@@ -104,6 +120,19 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
         <div class="title">Chat with us</div>
         <div class="status" data-online="false"><span class="dot"></span><span class="status-text">Connecting…</span></div>
       </div>
+      <form class="prechat" hidden>
+        <p class="prechat-intro">Introduce yourself so we know who we're chatting with.</p>
+        <label class="prechat-field">
+          <span>Name</span>
+          <input type="text" name="name" required maxlength="120" autocomplete="name" placeholder="Jane Doe" />
+        </label>
+        <label class="prechat-field">
+          <span>Email <em>(optional)</em></span>
+          <input type="email" name="email" maxlength="200" autocomplete="email" placeholder="jane@example.com" />
+        </label>
+        <p class="prechat-error" hidden></p>
+        <button type="submit">Start chat</button>
+      </form>
       <div class="body"></div>
       <div class="kb-suggestions" hidden></div>
       <div class="composer">
@@ -121,7 +150,12 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
   const statusTextEl = root.querySelector<HTMLSpanElement>(".status-text")!;
   const textareaEl = root.querySelector<HTMLTextAreaElement>("textarea")!;
   const sendBtnEl = root.querySelector<HTMLButtonElement>(".composer button")!;
+  const composerEl = root.querySelector<HTMLDivElement>(".composer")!;
   const suggestionsEl = root.querySelector<HTMLDivElement>(".kb-suggestions")!;
+  const prechatEl = root.querySelector<HTMLFormElement>(".prechat")!;
+  const prechatNameEl = root.querySelector<HTMLInputElement>('.prechat input[name="name"]')!;
+  const prechatEmailEl = root.querySelector<HTMLInputElement>('.prechat input[name="email"]')!;
+  const prechatErrorEl = root.querySelector<HTMLParagraphElement>(".prechat-error")!;
 
   const state: State = {
     status: "idle",
@@ -243,7 +277,7 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
     state.status = "loading";
     render();
     try {
-      const session = await api.startSession(visitorId);
+      const session = await api.startSession(visitorId, visitorName ?? undefined, visitorEmail ?? undefined);
       state.token = session.token;
       state.conversationId = session.conversationId;
       state.workspace = session.workspace;
@@ -305,10 +339,28 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
     }
   }
 
+  function showPrechat() {
+    prechatEl.hidden = false;
+    bodyEl.hidden = true;
+    suggestionsEl.hidden = true;
+    composerEl.hidden = true;
+    setTimeout(() => prechatNameEl.focus(), 50);
+  }
+
+  function hidePrechat() {
+    prechatEl.hidden = true;
+    bodyEl.hidden = false;
+    composerEl.hidden = false;
+  }
+
   function setOpen(open: boolean) {
     state.open = open;
     render();
     if (open) {
+      if (!visitorName) {
+        showPrechat();
+        return;
+      }
       if (state.status === "idle") void bootstrap();
       else connection?.sendRead();
       setTimeout(() => textareaEl.focus(), 50);
@@ -316,6 +368,32 @@ function initWidget(scriptEl: HTMLOrSVGScriptElement | null) {
   }
 
   bubbleEl.addEventListener("click", () => setOpen(!state.open));
+
+  prechatEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = prechatNameEl.value.trim();
+    if (!name) {
+      prechatErrorEl.textContent = "Please enter your name.";
+      prechatErrorEl.hidden = false;
+      prechatNameEl.focus();
+      return;
+    }
+    prechatErrorEl.hidden = true;
+
+    visitorName = name;
+    visitorEmail = prechatEmailEl.value.trim() || null;
+    try {
+      localStorage.setItem(nameStorageKey, visitorName);
+      if (visitorEmail) localStorage.setItem(emailStorageKey, visitorEmail);
+    } catch {
+      // Private browsing / storage disabled — this session still gets the
+      // name; it just won't be remembered next visit.
+    }
+
+    hidePrechat();
+    setTimeout(() => textareaEl.focus(), 50);
+    if (state.status === "idle") void bootstrap();
+  });
 
   function stopTypingSignal() {
     if (typingStopTimer) clearTimeout(typingStopTimer);

@@ -53,6 +53,13 @@ export const WIDGET_CSS = /* css */ `
 
   * { box-sizing: border-box; }
 
+  /* The UA stylesheet's [hidden] { display: none } loses to any of this
+     file's own display rules at equal specificity (author origin beats UA
+     origin, but only when there's no competing author rule) — .composer,
+     .body, .kb-suggestions, and .prechat all set their own display, so
+     toggling the hidden attribute alone silently does nothing without this. */
+  [hidden] { display: none !important; }
+
   .bubble {
     position: fixed;
     right: 20px;
@@ -127,6 +134,68 @@ export const WIDGET_CSS = /* css */ `
     opacity: 0.5;
   }
   .header .status[data-online="true"] .dot { background: #6fd6a8; opacity: 1; }
+
+  .prechat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    background: var(--hd-paper-100);
+    overflow-y: auto;
+  }
+  .prechat-intro {
+    font-size: 13px;
+    color: var(--hd-paper-700);
+    line-height: 1.5;
+    margin: 0 0 4px;
+  }
+  .prechat-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hd-paper-700);
+  }
+  .prechat-field em {
+    font-weight: 400;
+    font-style: normal;
+    color: var(--hd-paper-500);
+  }
+  .prechat-field input {
+    border: 1px solid var(--hd-paper-200);
+    border-radius: var(--hd-radius-md);
+    padding: 9px 10px;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--hd-paper-900);
+    background: white;
+  }
+  .prechat-field input:focus {
+    outline: none;
+    border-color: var(--hd-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hd-accent) 18%, transparent);
+  }
+  .prechat-error {
+    font-size: 12px;
+    color: var(--hd-signal-500);
+    margin: -6px 0 0;
+  }
+  .prechat button[type="submit"] {
+    margin-top: 4px;
+    padding: 10px;
+    border: none;
+    border-radius: var(--hd-radius-md);
+    background: var(--hd-accent);
+    color: white;
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .prechat button[type="submit"]:hover { background: var(--hd-accent-hover); }
 
   .body {
     flex: 1;

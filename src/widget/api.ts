@@ -42,11 +42,16 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
 
 export function createWidgetApi(apiBase: string, workspaceSlug: string) {
   return {
-    async startSession(visitorId: string): Promise<SessionResponse> {
+    async startSession(visitorId: string, name?: string, email?: string): Promise<SessionResponse> {
       const res = await fetch(`${apiBase}/api/widget/session`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workspaceSlug, visitorId }),
+        body: JSON.stringify({
+          workspaceSlug,
+          visitorId,
+          ...(name ? { name } : {}),
+          ...(email ? { email } : {}),
+        }),
       });
       return parseOrThrow<SessionResponse>(res);
     },

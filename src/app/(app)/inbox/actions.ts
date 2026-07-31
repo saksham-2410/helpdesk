@@ -38,6 +38,36 @@ export async function assignConversation(
   return {};
 }
 
+// ---------------------------------------------------------------------------
+// Contact
+// ---------------------------------------------------------------------------
+
+const ContactNameSchema = z.string().trim().min(1, "Name is required.").max(120);
+
+/**
+ * Chat-widget visitors who skip or predate the pre-chat name form show up
+ * as "Unknown" — this lets an agent set the name once they learn it, same
+ * update path the widget itself uses (contacts.name), so it also updates
+ * anywhere else the contact is referenced (conversation list, other threads).
+ */
+export async function updateContactName(
+  contactId: string,
+  name: string,
+): Promise<ActionState> {
+  const parsed = ContactNameSchema.safeParse(name);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid name." };
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from("contacts")
+    .update({ name: parsed.data })
+    .eq("id", contactId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/inbox");
+  return {};
+}
+
 const StatusSchema = z.enum(["open", "resolved"]);
 
 export async function setConversationStatus(
