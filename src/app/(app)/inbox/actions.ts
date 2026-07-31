@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { sendReply } from "@/lib/email/send";
 import { broadcast } from "@/lib/widget/realtime";
+import { scheduleSummaryRefresh } from "@/lib/ai/schedule";
 import {
   listRecentMessages,
   listConversationsPage,
@@ -250,6 +251,8 @@ export async function sendChatReplyAction(
       createdAt: message.created_at,
     },
   });
+
+  scheduleSummaryRefresh(supabase, conversationId, conversation.workspace_id);
 
   revalidatePath(`/inbox/${conversationId}`);
   return {};

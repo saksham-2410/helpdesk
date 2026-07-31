@@ -9,6 +9,7 @@ import {
 } from "@/lib/email/threading";
 import { stripQuotedHtml, stripQuotedText, toPlainText } from "@/lib/email/quoted";
 import { createDbThreadResolvers } from "@/lib/email/resolvers";
+import { scheduleSummaryRefresh } from "@/lib/ai/schedule";
 
 /**
  * Resend inbound webhook.
@@ -23,6 +24,11 @@ import { createDbThreadResolvers } from "@/lib/email/resolvers";
  * Runs entirely on the service-role client — there is no user session for an
  * inbound email — so every write below is scoped by hand rather than by RLS.
  */
+
+// A stored message now schedules a background summary refresh
+// (lib/ai/schedule.ts) via next/server's after() — same latency profile as
+// the summary/draft-reply routes, so it gets the same budget.
+export const maxDuration = 30;
 
 interface Headers {
   [key: string]: string;
@@ -255,6 +261,8 @@ export async function POST(request: Request) {
     console.error("[webhooks/resend] message insert failed", insertError);
     return new Response("Could not store message.", { status: 500 });
   }
+
+  scheduleSummaryRefresh(db, conversationId, workspaceId);
 
   return Response.json({ ok: true, conversationId });
 }

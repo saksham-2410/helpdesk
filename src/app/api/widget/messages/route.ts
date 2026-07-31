@@ -4,6 +4,7 @@ import { verifyVisitorToken, bearerToken, type VisitorClaims } from "@/lib/widge
 import { broadcast } from "@/lib/widget/realtime";
 import { widgetJson, widgetPreflight, widgetSafe } from "@/lib/widget/cors";
 import { rateLimit, clientKey } from "@/lib/rate-limit";
+import { scheduleSummaryRefresh } from "@/lib/ai/schedule";
 
 /**
  * GET/POST /api/widget/messages
@@ -14,6 +15,11 @@ import { rateLimit, clientKey } from "@/lib/rate-limit";
  * client-supplied conversationId instead would let any visitor read or post
  * into any conversation by guessing (or enumerating) a UUID.
  */
+
+// POST now schedules a background summary refresh (lib/ai/schedule.ts) via
+// next/server's after() — same latency profile as the summary/draft-reply
+// routes, so it gets the same budget.
+export const maxDuration = 30;
 
 export async function OPTIONS(request: Request) {
   return widgetPreflight(request);
@@ -156,6 +162,8 @@ async function handlePost(
       createdAt: message.created_at,
     },
   });
+
+  scheduleSummaryRefresh(db, claims.conversationId, claims.workspaceId);
 
   return widgetJson(
     request,

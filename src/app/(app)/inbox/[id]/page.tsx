@@ -6,6 +6,14 @@ import { listCannedResponses } from "@/lib/canned/data";
 import { features } from "@/lib/env";
 import { ConversationThread } from "./conversation-thread";
 
+// The chat/email reply actions invoked from this route now schedule a
+// background summary refresh (lib/ai/schedule.ts) via next/server's
+// after(), which runs a real Gemini/OpenRouter call — same latency profile
+// as the summary and draft-reply routes, so it gets the same budget. A
+// refresh that gets cut off mid-flight is a soft-fail (falls back to the
+// existing cache next read), not a data-loss risk.
+export const maxDuration = 30;
+
 export default async function ConversationPage({
   params,
 }: {
