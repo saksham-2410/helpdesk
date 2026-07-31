@@ -87,10 +87,14 @@ export const env = {
     return optional("OPENROUTER_API_KEY");
   },
   get openrouterModel() {
-    // A free-tier model by default so this costs nothing to turn on. Free
-    // model availability on OpenRouter rotates — check openrouter.ai/models
-    // (filter: free) if this one has been retired.
-    return optional("OPENROUTER_MODEL") ?? "meta-llama/llama-3.3-70b-instruct:free";
+    // A free-tier model by default so this costs nothing to turn on —
+    // verified directly against openrouter.ai/api/v1/models and a live test
+    // call (fast, correct JSON, $0 on the key's usage counter) before
+    // picking this one specifically over Google-served free models on
+    // OpenRouter, since the point of this fallback is surviving an outage
+    // on Google's side. Free model availability on OpenRouter rotates —
+    // check openrouter.ai/models (filter: free) if this one is retired.
+    return optional("OPENROUTER_MODEL") ?? "openai/gpt-oss-20b:free";
   },
 
   get vercelToken() {
