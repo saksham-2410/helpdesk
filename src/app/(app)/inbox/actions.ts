@@ -5,7 +5,14 @@ import { z } from "zod";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { sendReply } from "@/lib/email/send";
 import { broadcast } from "@/lib/widget/realtime";
-import { listRecentMessages, type MessagePage } from "@/lib/inbox/data";
+import {
+  listRecentMessages,
+  listConversationsPage,
+  type MessagePage,
+  type ConversationFilters,
+  type ConversationCursor,
+  type ConversationPage,
+} from "@/lib/inbox/data";
 
 export interface ActionState {
   error?: string;
@@ -19,6 +26,28 @@ export interface ActionState {
  * outside it silently matches zero rows rather than needing a guard clause
  * here to reject it.
  */
+
+// ---------------------------------------------------------------------------
+// Conversation list: filtering / pagination
+// ---------------------------------------------------------------------------
+
+/**
+ * Called by the list pane whenever a filter changes or "Load more" is
+ * clicked — the filters used to be applied client-side over an already
+ * -fetched top-150, which quietly went wrong (not errored) past 150
+ * conversations. `workspaceId` is caller-supplied rather than re-derived
+ * from the session because the client component already has it, but this
+ * is defense in depth only: RLS is the actual boundary, so a workspaceId
+ * that isn't the caller's own just matches zero rows.
+ */
+export async function loadConversationsPage(
+  workspaceId: string,
+  filters: ConversationFilters,
+  cursor?: ConversationCursor | null,
+): Promise<ConversationPage> {
+  const supabase = await createServerSupabase();
+  return listConversationsPage(supabase, workspaceId, filters, cursor);
+}
 
 // ---------------------------------------------------------------------------
 // Status: assign / snooze / resolve / reopen

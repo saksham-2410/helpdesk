@@ -5,6 +5,8 @@ import type {
   ConversationDetail,
   Message,
   WorkspaceMemberOption,
+  Channel,
+  ConversationStatus,
 } from "./types";
 
 /**
@@ -15,31 +17,87 @@ import type {
  * to apply correctly every time.
  */
 
-const LIST_LIMIT = 150;
+const CONVERSATION_PAGE_SIZE = 50;
 
-export async function listConversations(
+export interface ConversationFilters {
+  channel: Channel | "all";
+  status: ConversationStatus | "all";
+  assigneeId: string | "all" | "unassigned";
+}
+
+export interface ConversationCursor {
+  lastMessageAt: string;
+  id: string;
+}
+
+export interface ConversationPage {
+  items: ConversationListItem[];
+  nextCursor: ConversationCursor | null;
+}
+
+/**
+ * Filtered, paginated conversation list — the channel/status/assignee
+ * filters are applied in SQL rather than over an already-fetched array, and
+ * paging is a composite (last_message_at, id) keyset rather than a flat
+ * LIMIT. The previous version fetched a flat top-150 and filtered client
+ * -side: past 150 conversations, a filter tab like "Resolved" would only
+ * ever show resolved conversations *within that top-150-by-recency slice*
+ * — correct-looking, actually wrong, no error to notice. Composite keyset
+ * (not a plain last_message_at cursor) because two conversations landing in
+ * the same instant — the message-insert trigger updates last_message_at on
+ * every reply, across every conversation in the workspace, at any write
+ * volume — would otherwise skip or duplicate across pages on a plain cursor.
+ */
+export async function listConversationsPage(
   supabase: SupabaseClient,
   workspaceId: string,
-): Promise<ConversationListItem[]> {
-  const { data, error } = await supabase
+  filters: ConversationFilters,
+  cursor?: ConversationCursor | null,
+): Promise<ConversationPage> {
+  let query = supabase
     .from("conversations")
     .select(
       "id, channel, status, subject, assignee_id, last_message_at, last_message_preview, snoozed_until, contact:contacts(id, name, email)",
     )
-    .eq("workspace_id", workspaceId)
-    .order("last_message_at", { ascending: false })
-    .limit(LIST_LIMIT);
+    .eq("workspace_id", workspaceId);
 
-  if (error) {
-    console.error("[inbox] listConversations failed", error);
-    return [];
+  if (filters.channel !== "all") query = query.eq("channel", filters.channel);
+  if (filters.status !== "all") query = query.eq("status", filters.status);
+  if (filters.assigneeId === "unassigned") query = query.is("assignee_id", null);
+  else if (filters.assigneeId !== "all") query = query.eq("assignee_id", filters.assigneeId);
+
+  if (cursor) {
+    query = query.or(
+      `last_message_at.lt.${cursor.lastMessageAt},and(last_message_at.eq.${cursor.lastMessageAt},id.lt.${cursor.id})`,
+    );
   }
 
+  query = query
+    .order("last_message_at", { ascending: false })
+    .order("id", { ascending: false })
+    // One extra row is the cheapest way to know whether another page exists.
+    .limit(CONVERSATION_PAGE_SIZE + 1);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[inbox] listConversationsPage failed", error);
+    return { items: [], nextCursor: null };
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > CONVERSATION_PAGE_SIZE;
+  const page = hasMore ? rows.slice(0, CONVERSATION_PAGE_SIZE) : rows;
+
   // PostgREST types an embedded to-one relation as possibly-array.
-  return (data ?? []).map((row) => ({
+  const items = page.map((row) => ({
     ...row,
     contact: Array.isArray(row.contact) ? (row.contact[0] ?? null) : row.contact,
   })) as ConversationListItem[];
+
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? { lastMessageAt: last.last_message_at, id: last.id } : null;
+
+  return { items, nextCursor };
 }
 
 export async function getConversation(

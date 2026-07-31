@@ -1,7 +1,11 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
-import { listConversations, listMembers } from "@/lib/inbox/data";
+import { listConversationsPage, listMembers, type ConversationFilters } from "@/lib/inbox/data";
 import { ConversationListPane } from "./conversation-list";
+
+/** Same default the list pane's own filter state starts at — "Open" is
+ *  what an agent wants to see on every fresh inbox load. */
+const DEFAULT_FILTERS: ConversationFilters = { channel: "all", status: "open", assigneeId: "all" };
 
 /**
  * Wraps both the empty state (page.tsx) and the conversation detail route
@@ -21,8 +25,8 @@ export default async function InboxLayout({ children }: { children: React.ReactN
   // rather than one render behind.
   await supabase.rpc("wake_due_snoozed_conversations", { ws: workspace.id });
 
-  const [conversations, members] = await Promise.all([
-    listConversations(supabase, workspace.id),
+  const [conversationPage, members] = await Promise.all([
+    listConversationsPage(supabase, workspace.id, DEFAULT_FILTERS),
     listMembers(supabase, workspace.id),
   ]);
 
@@ -30,7 +34,8 @@ export default async function InboxLayout({ children }: { children: React.ReactN
     <div className="flex h-full min-h-0">
       <ConversationListPane
         workspaceId={workspace.id}
-        initialConversations={conversations}
+        initialConversations={conversationPage.items}
+        initialCursor={conversationPage.nextCursor}
         members={members}
       />
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
