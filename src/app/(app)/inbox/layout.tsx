@@ -12,6 +12,15 @@ export default async function InboxLayout({ children }: { children: React.ReactN
   const workspace = await requireWorkspace();
   const supabase = await createServerSupabase();
 
+  // wake_due_snoozed_conversations (0003_functions.sql) existed but was never
+  // called anywhere — a conversation snoozed with no reply from the customer
+  // stayed snoozed forever, since the only other reopen path is the
+  // message-insert trigger. Running it here means every inbox load self-heals
+  // any snoozes that came due, with no scheduler required. Awaited before the
+  // list fetch so a conversation that just woke up shows as open immediately
+  // rather than one render behind.
+  await supabase.rpc("wake_due_snoozed_conversations", { ws: workspace.id });
+
   const [conversations, members] = await Promise.all([
     listConversations(supabase, workspace.id),
     listMembers(supabase, workspace.id),

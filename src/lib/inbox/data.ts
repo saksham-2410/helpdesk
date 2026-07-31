@@ -60,6 +60,14 @@ export async function getConversation(
   return { ...data, contact } as ConversationDetail;
 }
 
+/**
+ * Full, unpaginated history. Kept as-is deliberately — lib/ai/summarize.ts
+ * relies on seeing every message to correctly compute "everything since
+ * up_to_message_id", and slicing that against only a recent page would
+ * silently corrupt the incremental-summary logic on any conversation longer
+ * than one page. listRecentMessages() below is the paginated one, purpose
+ * -built for rendering the thread instead.
+ */
 export async function listMessages(
   supabase: SupabaseClient,
   conversationId: string,
@@ -75,6 +83,56 @@ export async function listMessages(
     return [];
   }
   return data ?? [];
+}
+
+const MESSAGE_PAGE_SIZE = 50;
+
+export interface MessagePage {
+  messages: Message[];
+  hasMore: boolean;
+}
+
+/**
+ * Paginated thread history for the inbox UI. Loads the most recent page by
+ * default; pass `before` (a message's created_at) to walk further back.
+ * Composite (created_at, id) keyset rather than a plain created_at cursor —
+ * two messages landing in the same instant (concurrent writes, or a batch
+ * import later) would otherwise skip or duplicate across pages.
+ */
+export async function listRecentMessages(
+  supabase: SupabaseClient,
+  conversationId: string,
+  options?: { before?: { createdAt: string; id: string }; limit?: number },
+): Promise<MessagePage> {
+  const limit = options?.limit ?? MESSAGE_PAGE_SIZE;
+
+  let query = supabase
+    .from("messages")
+    .select("id, conversation_id, author_type, author_user_id, body_html, body_text, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    // One extra row is the cheapest way to know whether an earlier page
+    // exists without a separate count query.
+    .limit(limit + 1);
+
+  if (options?.before) {
+    const { createdAt, id } = options.before;
+    query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[inbox] listRecentMessages failed", error);
+    return { messages: [], hasMore: false };
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  // Fetched newest-first for the LIMIT/cursor semantics above; the thread
+  // itself renders oldest-first.
+  return { messages: page.reverse(), hasMore };
 }
 
 export async function listMembers(

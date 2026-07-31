@@ -19,6 +19,7 @@ import {
   markConversationRead,
   sendTypingSignal,
   updateContactName,
+  loadEarlierMessages,
   type ActionState,
 } from "../actions";
 
@@ -35,6 +36,7 @@ const TYPING_STOP_DELAY_MS = 2000;
 export function ConversationThread({
   conversation,
   initialMessages,
+  initialHasMoreHistory,
   members,
   currentUserId,
   cannedResponses,
@@ -42,6 +44,7 @@ export function ConversationThread({
 }: {
   conversation: ConversationDetail;
   initialMessages: Message[];
+  initialHasMoreHistory: boolean;
   members: WorkspaceMemberOption[];
   currentUserId: string;
   cannedResponses: CannedResponse[];
@@ -51,7 +54,38 @@ export function ConversationThread({
   const [status, setStatus] = useState(conversation.status);
   const [assigneeId, setAssigneeId] = useState(conversation.assignee_id);
   const [visitorTyping, setVisitorTyping] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(initialHasMoreHistory);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  async function loadEarlierHistory() {
+    const oldest = messages[0];
+    if (!oldest || loadingHistory) return;
+
+    setLoadingHistory(true);
+    const page = await loadEarlierMessages(conversation.id, {
+      createdAt: oldest.created_at,
+      id: oldest.id,
+    });
+
+    const bodyEl = bodyRef.current;
+    const prevScrollHeight = bodyEl?.scrollHeight ?? 0;
+    const prevScrollTop = bodyEl?.scrollTop ?? 0;
+
+    setMessages((prev) => [...page.messages, ...prev]);
+    setHasMoreHistory(page.hasMore);
+    setLoadingHistory(false);
+
+    // Prepending content above the viewport otherwise reads as the thread
+    // silently jumping — restore the exact reading position once the new
+    // rows have actually been laid out. The auto-scroll-to-bottom effect
+    // below doesn't fight this: it only fires when the LAST message
+    // changes, which prepending never does.
+    requestAnimationFrame(() => {
+      if (!bodyEl) return;
+      bodyEl.scrollTop = bodyEl.scrollHeight - prevScrollHeight + prevScrollTop;
+    });
+  }
 
   useEffect(() => {
     void markConversationRead(conversation.id);
@@ -108,9 +142,23 @@ export function ConversationThread({
     };
   }, [conversation.id]);
 
+  // Scrolls to the bottom when a message is truly appended (a new one has
+  // arrived) or the typing indicator toggles on — but NOT when history is
+  // prepended above (loadEarlierHistory handles that scroll position
+  // itself). Comparing "did the last message's id change" rather than
+  // reacting to any length change is what makes this immune to that case:
+  // prepending never touches messages.at(-1). It's also immune to effects
+  // firing more than once for the same render (React Strict Mode does this
+  // in dev) — unlike a one-shot ref flag, comparing values is idempotent.
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
-  }, [messages.length, visitorTyping]);
+    const lastId = messages.at(-1)?.id;
+    const appended = lastId !== undefined && lastId !== lastMessageIdRef.current;
+    lastMessageIdRef.current = lastId;
+    if (appended || visitorTyping) {
+      bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
+    }
+  }, [messages, visitorTyping]);
 
   return (
     <>
@@ -129,6 +177,16 @@ export function ConversationThread({
 
       <div ref={bodyRef} className="flex-1 overflow-y-auto bg-canvas px-6 py-5">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
+          {hasMoreHistory && (
+            <button
+              type="button"
+              onClick={loadEarlierHistory}
+              disabled={loadingHistory}
+              className="mx-auto rounded-full border border-border-default bg-surface px-3 py-1 text-xs font-medium text-secondary transition-colors hover:bg-surface-emphasis disabled:opacity-50"
+            >
+              {loadingHistory ? "Loading…" : "Load earlier messages"}
+            </button>
+          )}
           {messages.map((m) => (
             <MessageRow key={m.id} message={m} currentUserId={currentUserId} members={members} />
           ))}

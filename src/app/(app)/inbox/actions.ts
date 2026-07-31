@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { sendReply } from "@/lib/email/send";
 import { broadcast } from "@/lib/widget/realtime";
+import { listRecentMessages, type MessagePage } from "@/lib/inbox/data";
 
 export interface ActionState {
   error?: string;
@@ -36,6 +37,24 @@ export async function assignConversation(
   if (error) return { error: error.message };
   revalidatePath("/inbox");
   return {};
+}
+
+// ---------------------------------------------------------------------------
+// Message history
+// ---------------------------------------------------------------------------
+
+/**
+ * Called by the thread UI's "Load earlier messages" affordance — the initial
+ * page render only ships the most recent page (see [id]/page.tsx), so
+ * walking further back is a client-triggered fetch rather than part of the
+ * page load.
+ */
+export async function loadEarlierMessages(
+  conversationId: string,
+  before: { createdAt: string; id: string },
+): Promise<MessagePage> {
+  const supabase = await createServerSupabase();
+  return listRecentMessages(supabase, conversationId, { before });
 }
 
 // ---------------------------------------------------------------------------

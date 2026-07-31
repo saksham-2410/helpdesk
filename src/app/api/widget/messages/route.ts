@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error;
   const { claims } = auth;
 
-  const limited = rateLimit(clientKey(request, `widget-send:${claims.contactId}`), {
+  const limited = await rateLimit(clientKey(request, `widget-send:${claims.contactId}`), {
     limit: 20,
     windowMs: 60 * 1000,
   });

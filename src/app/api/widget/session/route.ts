@@ -43,7 +43,7 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const limited = rateLimit(clientKey(request, "widget-session"), {
+  const limited = await rateLimit(clientKey(request, "widget-session"), {
     limit: 30,
     windowMs: 10 * 60 * 1000,
   });

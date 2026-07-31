@@ -1,16 +1,21 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
 /**
- * In-memory sliding-window rate limiter.
+ * Rate limiter with an optional Redis-backed path.
  *
- * Deliberately not a production-grade solution — a single serverless
+ * Without UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN set, this falls
+ * back to the in-memory sliding window below — a single serverless
  * instance's memory does not coordinate across regions or cold starts, so
- * this is a soft ceiling, not a hard guarantee. It is enough to blunt casual
- * abuse of the widget and webhook endpoints without adding a Redis dependency
- * to a 48-hour build.
+ * it's a soft ceiling, not a hard guarantee. Fine for blunting casual abuse
+ * at low volume; the real ceiling at higher concurrency is exactly this gap
+ * (20 instances each enforcing their own "30 per 10 min" is actually 600).
  *
- * The real answer is Upstash's Redis-backed limiter (works natively with
- * Vercel's edge network); swapping this module for that one is a drop-in
- * change because the call site only needs `{ ok, remaining, resetAt }`. Noted
- * as a known limitation in the README rather than pretended away.
+ * With those two env vars set, every call is enforced against one shared
+ * Redis-backed sliding window instead, so the limit means what it says
+ * regardless of how many instances are running. Same call sites, same
+ * `{ok, remaining, resetAt}` result shape — this was always meant to be a
+ * drop-in swap, not a rewrite.
  */
 
 interface Bucket {
@@ -32,7 +37,9 @@ export interface RateLimitResult {
   resetAt: number;
 }
 
-export function rateLimit(
+/** The original in-memory implementation, kept directly testable (and as
+ *  the fallback) under its own name now that `rateLimit` below is async. */
+export function rateLimitMemory(
   key: string,
   { limit, windowMs }: { limit: number; windowMs: number },
 ): RateLimitResult {
@@ -61,6 +68,52 @@ function sweep(now: number) {
   for (const [key, bucket] of buckets) {
     // A bucket outside any plausible window is dead weight either way.
     if (now - bucket.windowStart > 10 * 60 * 1000) buckets.delete(key);
+  }
+}
+
+// --- Optional Redis backing --------------------------------------------
+
+const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const redis = upstashUrl && upstashToken ? new Redis({ url: upstashUrl, token: upstashToken }) : null;
+
+// Ratelimit.slidingWindow's config is fixed at construction, but call sites
+// here pass different (limit, windowMs) pairs per route — so instances are
+// built lazily per distinct pair and reused, rather than one-per-call.
+const limiters = new Map<string, Ratelimit>();
+
+function getRedisLimiter(limit: number, windowMs: number): Ratelimit {
+  const cacheKey = `${limit}:${windowMs}`;
+  let limiter = limiters.get(cacheKey);
+  if (!limiter) {
+    limiter = new Ratelimit({
+      redis: redis!,
+      limiter: Ratelimit.slidingWindow(limit, `${windowMs} ms`),
+      analytics: false,
+      // Every route already namespaces its own key via clientKey()'s
+      // `extra` suffix — no need for Ratelimit's own prefix on top.
+      prefix: "hd",
+    });
+    limiters.set(cacheKey, limiter);
+  }
+  return limiter;
+}
+
+export async function rateLimit(
+  key: string,
+  options: { limit: number; windowMs: number },
+): Promise<RateLimitResult> {
+  if (!redis) return rateLimitMemory(key, options);
+
+  try {
+    const result = await getRedisLimiter(options.limit, options.windowMs).limit(key);
+    return { ok: result.success, remaining: result.remaining, resetAt: result.reset };
+  } catch (err) {
+    // Redis down or misconfigured must not take the route down with it —
+    // degrade to the in-memory window rather than failing every request
+    // (or, worse, failing open with no limit at all).
+    console.error("[rate-limit] Redis limiter failed, falling back to in-memory", err);
+    return rateLimitMemory(key, options);
   }
 }
 

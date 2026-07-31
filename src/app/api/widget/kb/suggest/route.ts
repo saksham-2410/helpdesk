@@ -26,7 +26,7 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const limited = rateLimit(clientKey(request, "kb-suggest"), {
+  const limited = await rateLimit(clientKey(request, "kb-suggest"), {
     limit: 60,
     windowMs: 60 * 1000,
   });

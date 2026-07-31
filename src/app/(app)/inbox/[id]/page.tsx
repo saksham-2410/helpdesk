@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/workspace";
-import { getConversation, listMessages, listMembers } from "@/lib/inbox/data";
+import { getConversation, listRecentMessages, listMembers } from "@/lib/inbox/data";
 import { listCannedResponses } from "@/lib/canned/data";
 import { features } from "@/lib/env";
 import { ConversationThread } from "./conversation-thread";
@@ -20,9 +20,13 @@ export default async function ConversationPage({
   // (or one that doesn't exist) simply returns null here — no separate
   // workspace_id check needed, and nothing distinguishes "not found" from
   // "not yours" to the client, which is the correct behavior either way.
-  const [conversation, messages, members, cannedResponses] = await Promise.all([
+  //
+  // Only the most recent page of messages loads here — a years-old support
+  // thread with thousands of messages must not ship its entire history on
+  // every open. ConversationThread fetches earlier pages on demand.
+  const [conversation, messagePage, members, cannedResponses] = await Promise.all([
     getConversation(supabase, id),
-    listMessages(supabase, id),
+    listRecentMessages(supabase, id),
     listMembers(supabase, workspace.id),
     listCannedResponses(supabase, workspace.id),
   ]);
@@ -32,7 +36,8 @@ export default async function ConversationPage({
   return (
     <ConversationThread
       conversation={conversation}
-      initialMessages={messages}
+      initialMessages={messagePage.messages}
+      initialHasMoreHistory={messagePage.hasMore}
       members={members}
       currentUserId={user!.id}
       cannedResponses={cannedResponses}
